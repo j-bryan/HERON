@@ -169,14 +169,15 @@ class Component(Base, CashFlowUser):
     except IndexError: # there are no interactions!
       return None
 
-  def get_sqrt_RTE(self):
+  def get_sqrt_RTE(self, meta, raw=False):
     """
       Provide the square root of the round-trip efficiency for this component.
       Note we use the square root due to splitting loss across the input and output.
-      @ In, None
-      @ Out, RTE, float, round-trip efficiency as a multiplier
+      @ In, meta, dict, arbitrary metadata from EGRET
+      @ In, raw, bool, optional, if True then return the ValuedParam instance for capacity, instead of the evaluation
+      @ Out, sqrt_rte, float (or ValuedParam), the capacity of this component's interaction
     """
-    return self.get_interaction().get_sqrt_RTE()
+    return self.get_interaction().get_sqrt_RTE(meta, raw=raw)
 
   def print_me(self, tabs=0, tab='  '):
     """
@@ -426,7 +427,7 @@ class Interaction(Base):
                                         #   for example, {(Producer, 'capacity'): 'method'}
     self._sqrt_rte = None               # sqrt of the round-trip efficiency for this interaction
     self._tracking_vars = []            # list of trackable variables for dispatch activity
-    self._valued_param_vars = []        # list of variables which may be sampled (i.e. defined by a ValuedParam)
+    self._parametric_params = []        # list of all Parametric ValuedParams (can be sampled)
 
   def read_input(self, specs, mode, comp_name):
     """
@@ -471,15 +472,18 @@ class Interaction(Base):
       @ In, mode, string, case mode to operate in (e.g. 'sweep' or 'opt')
       @ Out, None
     """
-    self._valued_param_vars.append(name)
     vp = ValuedParamHandler(name)
     signal = vp.read(comp, spec, mode)
+    if vp.is_parametric():
+      # We want to make a list of any ValuedParams which might be sampled later. For now, only Parametric ValuedParams
+      # are included. Would it make sense to include other types here?
+      self._parametric_params.append(vp)
     self._signals.update(signal)
     self._crossrefs[name] = vp
     setattr(self, name, vp)
 
-  def get_valued_param_vars(self):
-    return self._valued_param_vars
+  def get_parametric_params(self):
+    return self._parametric_params
 
   def get_capacity(self, meta, raw=False):
     """
@@ -719,7 +723,7 @@ class Producer(Interaction):
     specs = super().get_input_specs()
     specs.addSub(InputData.parameterInputFactory('consumes', contentType=InputTypes.StringListType, descr=r"""The producer can either produce or consume a resource. If the producer is a consumer it must be accompnied with a transfer function to convert one source of energy to another. """))
     descr = r"""describes how input resources yield output resources for this component's transfer function."""
-    specs.addSub(vp_factory.make_input_specs('transfer', descr=descr, kind='transfer'))
+    specs.addSub(vp_factory.make_input_specs('transfer', descr=descr, kind='transfer'))  # TODO: We should be able to specify <sweep_values> for linear rates too!
     return specs
 
   def __init__(self, **kwargs):
@@ -945,13 +949,13 @@ class Storage(Interaction):
         self._set_valued_param('_initial_stored', comp_name, item, mode)
       elif item.getName() == 'strategy':
         self._set_valued_param('_strategy', comp_name, item, mode)
-      elif item.getName() == 'RTE':
-        self._set_valued_param('_sqrt_rte', comp_name, item, mode)
+      elif item.getName() == 'RTE':  # TODO: edge cases to consider: (a) DataGenerator is given (b) Function is given (c) ARMA is given (d) multiplier also given
+        self._set_valued_param('_sqrt_rte', comp_name, item, mode)  # not sure if we've been given a float or a list yet
         rte_vals = self._sqrt_rte.get_value()
-        if isinstance(rte_vals, list):
-          sqrt_rte_vals = [rte ** 0.5 for rte in rte_vals]  # want to store square root of given RTE values
+        if isinstance(rte_vals, list):  # if list, get sqrt of each element
+          sqrt_rte_vals = [rte ** 0.5 for rte in rte_vals]
         else:  # float or int
-          sqrt_rte_vals = rte ** 0.5
+          sqrt_rte_vals = rte_vals ** 0.5
         self._sqrt_rte.set_value(sqrt_rte_vals)
     assert len(self._stores) == 1, 'Multiple storage resources given for component "{}"'.format(comp_name)
     self._stores = self._stores[0]

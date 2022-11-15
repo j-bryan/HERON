@@ -282,9 +282,15 @@ class Template(TemplateBase, Base):
 
     # Add component opt vars
     for comp in components:
-      comp_cap_type = comp.get_capacity(None, raw=True).type
-      if comp_cap_type  not in ['Function', 'ARMA', 'SyntheticHistory']:
-        var_list.append(f'{comp.name}_capacity')
+      interaction = comp.get_interaction()
+      for vp in interaction.get_parametric_params():
+        vp_type = vp.type
+        if vp_type not in ['Function', 'ARMA', 'SyntheticHistory']:
+          var_list.append(f'{comp.name}{vp.name}')  # NOTE: vp.name has a leading underscore
+
+      # comp_cap_type = comp.get_capacity(None, raw=True).type
+      # if comp_cap_type  not in ['Function', 'ARMA', 'SyntheticHistory']:
+      #   var_list.append(f'{comp.name}_capacity')
 
     # Add dispatch opt vars
     for var in case.dispatch_vars.keys():
@@ -464,8 +470,8 @@ class Template(TemplateBase, Base):
     for component in components:
       comp_name = component.name
       interaction = component.get_interaction()
-      for vp in interaction.get_valued_param_vars():
-        var_name = comp_name + vp
+      for vp in interaction.get_parametric_params():
+        var_name = comp_name + vp.name
         attribs = {'variable': var_name, 'type': 'input'}
         new = xmlUtils.newNode('alias', text=text.format(var_name), attrib=attribs)
         raven.append(new)
@@ -589,32 +595,22 @@ class Template(TemplateBase, Base):
 
     for component in components:
       interaction = component.get_interaction()
-      # NOTE this algorithm does not check for everything to be swept! Future work could expand it.
-      # This is approached by the labels feature above
-      ## Currently checked: Component.Interaction.Capacity
-      ## --> this really needs to be made generic for all kinds of valued params!
       name = component.name
-      valued_param_vars = interaction.get_valued_param_vars()
-      for vp_name in valued_param_vars:
-        vp = getattr(interaction, vp_name)
-        feature_name = vp_name[1:]  # vp_name should have a leading underscore that we don't want to keep
-        # do we already know the parameter values?
-        if vp.is_parametric():
-          vals =  vp.get_value(debug=case.debug['enabled'])
-          var_name = self.namingTemplates['variable'].format(unit=name, feature=feature_name)
-          # is the variable being swept over?
-          if isinstance(vals, list):
-            # make new Distribution, Sampler.Grid.variable
-            dist, xml = self._create_new_sweep_capacity(name, var_name, vals, sampler)
-            dists_node.append(dist)
-            samps_node.append(xml)
-            # NOTE assumption (input checked): only one interaction per component
-          # if not being swept, then it's just a fixed value.
-          else:
-            samps_node.append(xmlUtils.newNode('constant', text=vals, attrib={'name': var_name}))
+      for vp in interaction.get_parametric_params():  # these are always Parametric ValuedParams
+        vals = vp.get_value(debug=case.debug['enabled'])
+        feature_name = vp.name[1:]  # vp_name should have a leading underscore that we don't want to keep
+        var_name = self.namingTemplates['variable'].format(unit=name, feature=feature_name)
+        # How many values are associated with the current ValuedParam?
+        if isinstance(vals, list):
+          # make new Distribution, Sampler.Grid.variable
+          dist, xml = self._create_new_sweep_capacity(name, var_name, vals, sampler)
+          # print(f'Component: {name}, Var: {var_name}, dist: {dist}')
+          dists_node.append(dist)
+          samps_node.append(xml)
+          # NOTE assumption (input checked): only one interaction per component
+        # if not being swept, then it's just a fixed value.
         else:
-          # this capacity will be evaluated by ARMA/Function, and doesn't need to be added here.
-          pass
+          samps_node.append(xmlUtils.newNode('constant', text=vals, attrib={'name': var_name}))
     if case.outerParallel == 0 and case.useParallel:
       #XXX if we had a way to calculate this ahead of time,
       # this could be done in _modify_outer_runinfo
@@ -999,7 +995,7 @@ class Template(TemplateBase, Base):
       ## Constants from outer (namely sweep/opt capacities) are set in the MC Sampler from the outer
       ## The Dispatch needs info from the Outer to know which capacity to use, so we can't pass it from here.
       capacity = component.get_capacity(None, raw=True)
-      interaction = component.get_interaction()
+      interaction = component.get_interaction()  # TODO: is this useful for anything?
       parametric = capacity.is_parametric()
 
       if parametric:

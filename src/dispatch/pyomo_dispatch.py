@@ -266,7 +266,7 @@ class Pyomo(Dispatcher):
         if intr.is_type('Storage'):
           self._create_production_param(m, comp, activity, tag='level')
           # set up "activity" rates (change in level over time, plus efficiency)
-          rte2 = comp.get_sqrt_RTE() # square root of the round-trip efficiency
+          rte2 = comp.get_sqrt_RTE(meta)[0][intr.get_resource()] # square root of the round-trip efficiency
           L  = len(activity)
           deltas = np.zeros(L)
           deltas[1:] = activity[1:] - activity[:-1]
@@ -830,7 +830,7 @@ class Pyomo(Dispatcher):
     else:
       previous = initial_storage[comp]
       dt = m.Times[1] - m.Times[0]
-    rte2 = comp.get_sqrt_RTE() # square root of the round-trip efficiency
+    rte2 = comp.get_sqrt_RTE(None, raw=True).get_value() # square root of the round-trip efficiency
     production = - rte2 * charge_var[r, t] - discharge_var[r, t] / rte2
     return level_var[r, t] == previous + production * dt
 

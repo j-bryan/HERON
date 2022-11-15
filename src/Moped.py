@@ -216,7 +216,7 @@ class MOPED(Base):
     elif kind == 'stores':
       self._component_meta[comp.name]['Stores'] = element._stores
       self._component_meta[comp.name]['Initial Value'] = element._initial_stored.get_value()
-      self._component_meta[comp.name]['SRTE'] = element.get_sqrt_RTE()
+      self._component_meta[comp.name]['SRTE'] = element.get_sqrt_RTE(None, raw=True).get_value()
     self._component_meta[comp.name]['Consumes'] = None
     self._component_meta[comp.name]['Dispatch'] = element._dispatchable
     # Different possible capacity value definitions for a component
