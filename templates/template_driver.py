@@ -1233,6 +1233,10 @@ class Template(TemplateBase, Base):
       db.attrib.update({'class': 'OutStreams', 'type': 'Print'})
       # the database and outstream print have the same name, so don't need to change text of node
 
+    # saving inner run samples' metrics (NPV, VaR, etc.)
+    if case.data_handling['save_all_inner_metrics']:
+      self._updateCommaSeperatedList(template.find('RunInfo').find('Sequence'), 'sample_metrics_full', position=-1)
+
 
   ##### CASHFLOW #####
   def _modify_cash(self, template, case, components, sources):

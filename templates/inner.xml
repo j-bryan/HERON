@@ -27,6 +27,10 @@
       <Input class='DataObjects' type='PointSet'>metrics_stats</Input>
       <Output class='Databases' type='NetCDF'>disp_results</Output>
     </IOStep>
+    <IOStep name="sample_metrics_full">
+      <Input class="DataObjects" type="PointSet">arma_metrics</Input>
+      <Output class="OutStreams" type="Print">all_metrics</Output>
+    </IOStep>
     <!-- <IOStep name="debug_print">
       <Input class='DataObjects' type='PointSet'>arma_samples</Input>
       <Output class='OutStreams' type='Print'>disp_debug</Output>
@@ -127,6 +131,10 @@
     <Print name='disp_results'>
       <type>csv</type>
       <source>metrics_stats</source>
+    </Print>
+    <Print name="all_metrics">
+      <type>csv</type>
+      <source>arma_metrics</source>
     </Print>
   </OutStreams>
 

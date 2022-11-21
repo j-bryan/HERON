@@ -173,6 +173,10 @@ class Case(Base):
         descr=r"""which type of data format to transfer results from inner (stochastic dispatch optimization) runs to
                   the outer (capacity and meta-variable optimization) run. CSV is generally slower and not recommended,
                   but may be useful for debugging. NetCDF is more generally more efficient. \default{netcdf}"""))
+    data_handling.addSub(InputData.parameterInputFactory('save_all_inner_metrics', contentType=InputTypes.BoolType,
+                                                         descr=r"""note that defines if metrics from all inner samples 
+                                                         should be saved, in addition to summary metrics. 
+                                                         \default{False}"""))
     input_specs.addSub(data_handling)
 
     input_specs.addSub(InputData.parameterInputFactory('num_arma_samples', contentType=InputTypes.IntegerType,
@@ -414,6 +418,7 @@ class Case(Base):
 
     self.data_handling = {             # data handling options
       'inner_to_outer': 'netcdf',      # how to pass inner data to outer (csv, netcdf)
+      'save_all_inner_metrics': False          # if all inner metrics should be saved
     }
 
     self._time_discretization = None   # (start, end, number) for constructing time discretization, same as argument to np.linspace
@@ -542,9 +547,13 @@ class Case(Base):
       name = sub.getName()
       if name == 'inner_to_outer':
         settings['inner_to_outer'] = sub.value
+      elif name == 'save_all_inner_metrics':
+        settings['save_all_inner_metrics'] = sub.value
     # set defaults
     if 'inner_to_outer' not in settings:
       settings['inner_to_outer'] = 'netcdf'
+    if 'save_all_inner_metrics' not in settings:
+      settings['save_all_inner_metrics'] = False
     return settings
 
   def _read_time_discr(self, node):
