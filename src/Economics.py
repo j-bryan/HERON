@@ -511,38 +511,6 @@ class CashFlow:
     params = self.calculate_params(values_dict)
     return params['cost']
 
-  # def calculate_params(self, values_dict):
-  #   """
-  #     Calculates the value of the cash flow parameters.
-  #     @ In, values_dict, dict, mapping from simulation variable names to their values (as floats or numpy arrays)
-  #     @ Out, params, dict, dictionary of parameters mapped to values including the cost
-  #   """
-  #   # TODO maybe don't cast these as floats, as they could be symbolic expressions (seems unlikely)
-  #   Dp = self._reference.evaluate(values_dict, target_var='reference_driver')[0]['reference_driver']
-  #   x = self._scale.evaluate(values_dict, target_var='scaling_factor_x')[0]['scaling_factor_x']
-  #   a = self._alpha.evaluate(values_dict, target_var='reference_price')[0]['reference_price']
-  #   D = self._driver.evaluate(values_dict, target_var='driver')[0]['driver']
-  #   # Let's put everything in lists to keep the approach more general
-  #
-  #   if not isinstance(Dp, list):
-  #     Dp = [Dp]
-  #   if not isinstance(x, list):
-  #     x = [x]
-  #   if not isinstance(a, list):
-  #     a = [a]
-  #   if not isinstance(D, list):
-  #     D = [D]
-  #
-  #   from itertools import product as iter_product
-  #   params = []
-  #   for param_set in iter_product([Dp, x, a, D]):
-  #     Dpi, xi, ai, Di = param_set
-  #     cost = a * (D / Dp) ** x
-  #     params.append({'alpha': ai, 'driver': Di, 'ref_driver': Dpi, 'scaling': xi, 'cost': cost})
-  #   # cost = a * (D / Dp) ** x  # TODO: a, D, Dp, x might not be floats! Treat as arbitrary Parametric ValuedParam
-  #   # params = {'alpha': a, 'driver': D, 'ref_driver': Dp, 'scaling': x, 'cost': cost} # TODO float(cost) except in pyomo it's not a float
-  #   return params
-
   def calculate_params(self, values_dict):
     """
       Calculates the value of the cash flow parameters.
