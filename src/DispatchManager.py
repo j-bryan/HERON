@@ -288,10 +288,22 @@ class DispatchRunner:
         if self._save_dispatch:
           dispatch_results[interp_year][seg] = dispatch
         # build evaluation cash flows
+        # TODO: Could handle multiple cash flow params here
         self._segment_cashflow(meta, s, seg, year, dispatch, multiplicity,
                                project_life, interp_years, all_structure, final_components)
     # TEAL, take it away.
+    # TODO: any way to handle multiple cash flow params here at the end?
     cf_metrics = self._final_cashflow(meta, final_components, final_settings)
+    print('\n\n\n\n*********************************')
+    print('*********************************\n')
+    print(f'final_components:      {final_components}')
+    print(f'final_settings:            {final_settings}')
+    print('\n*********************************')
+    print('*********************************\n\n\n\n')
+    # dispatch_results = {} (empty dict)
+    # cf_metrics = {'NPV': val, 'outputType': None}
+    # final_components = {component name (str): TEAL.src.CashFlows.Component object}
+    # final_settings = TEAL.src.CashFlows.GlobalSettings object
     return dispatch_results, cf_metrics
 
   def _build_econ_objects(self, heron_case, heron_components, project_life):
