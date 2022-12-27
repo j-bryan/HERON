@@ -951,7 +951,7 @@ class Storage(Interaction):
         if isinstance(rte_vals, list):
           sqrt_rte_vals = [rte ** 0.5 for rte in rte_vals]  # want to store square root of given RTE values
         else:  # float or int
-          sqrt_rte_vals = rte ** 0.5
+          sqrt_rte_vals = rte_vals ** 0.5
         self._sqrt_rte.set_value(sqrt_rte_vals)
     assert len(self._stores) == 1, 'Multiple storage resources given for component "{}"'.format(comp_name)
     self._stores = self._stores[0]
