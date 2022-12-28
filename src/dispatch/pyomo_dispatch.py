@@ -830,7 +830,7 @@ class Pyomo(Dispatcher):
     else:
       previous = initial_storage[comp]
       dt = m.Times[1] - m.Times[0]
-    rte2 = comp.get_sqrt_RTE() # square root of the round-trip efficiency
+    rte2 = comp.get_sqrt_RTE({}, raw=True).get_value() # square root of the round-trip efficiency
     production = - rte2 * charge_var[r, t] - discharge_var[r, t] / rte2
     return level_var[r, t] == previous + production * dt
 

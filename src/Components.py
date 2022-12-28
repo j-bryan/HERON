@@ -169,14 +169,14 @@ class Component(Base, CashFlowUser):
     except IndexError: # there are no interactions!
       return None
 
-  def get_sqrt_RTE(self):
+  def get_sqrt_RTE(self, meta, raw=False):
     """
       Provide the square root of the round-trip efficiency for this component.
       Note we use the square root due to splitting loss across the input and output.
       @ In, None
       @ Out, RTE, float, round-trip efficiency as a multiplier
     """
-    return self.get_interaction().get_sqrt_RTE()
+    return self.get_interaction().get_sqrt_RTE(meta, raw)
 
   def print_me(self, tabs=0, tab='  '):
     """

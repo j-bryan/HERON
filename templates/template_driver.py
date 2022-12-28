@@ -257,7 +257,7 @@ class Template(TemplateBase, Base):
     if case.useParallel:
       #XXX this doesn't handle non-mpi modes like torque or other custom ones
       mode = xmlUtils.newNode('mode', text='mpi')
-      mode.append(xmlUtils.newNode('runQSUB'))  # I'd rather this were optional; not desired when running on a local machine
+      # mode.append(xmlUtils.newNode('runQSUB'))  # I'd rather this were optional; not desired when running on a local machine
       if 'memory' in case.parallelRunInfo:
         mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
       for sub in case.parallelRunInfo:
@@ -281,10 +281,15 @@ class Template(TemplateBase, Base):
     var_list = []
 
     # Add component opt vars
-    for comp in components:
-      comp_cap_type = comp.get_capacity(None, raw=True).type
-      if comp_cap_type  not in ['Function', 'ARMA', 'SyntheticHistory']:
-        var_list.append(f'{comp.name}_capacity')
+    valued_params = self._gather_valued_params(components)
+    for comp_name, vps in valued_params.items():
+      for vp_name, vp in vps.items():
+        if vp.is_parametric():
+          var_list.append(vp_name)
+    #for comp in components:
+    #  comp_cap_type = comp.get_capacity(None, raw=True).type
+    #  if comp_cap_type not in ['Function', 'ARMA', 'SyntheticHistory']:
+    #    var_list.append(f'{comp.name}_capacity')
 
     # Add dispatch opt vars
     for var in case.dispatch_vars.keys():
@@ -461,14 +466,28 @@ class Template(TemplateBase, Base):
     else:
       text = 'Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{}'
 
-    for component in components:
-      comp_name = component.name
-      interaction = component.get_interaction()
-      for vp in interaction.get_valued_param_vars():
-        var_name = comp_name + vp
-        attribs = {'variable': var_name, 'type': 'input'}
-        new = xmlUtils.newNode('alias', text=text.format(var_name), attrib=attribs)
+    valued_params = self._gather_valued_params(components)
+    for comp_name, vps in valued_params.items():
+      for vp_name, vp in vps.items():
+        attribs = {'variable': vp_name, 'type': 'input'}
+        new = xmlUtils.newNode('alias', text=text.format(vp_name), attrib=attribs)
         raven.append(new)
+
+    #for component in components:
+    #  comp_name = component.name
+    #  interaction = component.get_interaction()
+    #  for vp in interaction.get_valued_param_vars():
+    #    var_name = comp_name + vp
+    #    attribs = {'variable': var_name, 'type': 'input'}
+    #    new = xmlUtils.newNode('alias', text=text.format(var_name), attrib=attribs)
+    #    raven.append(new)
+    #  for cf in component.get_cashflows():
+    #    cf_name = cf.name
+    #    for vp in cf.get_parametric_params():
+    #      var_name = comp_name + '_' + cf_name + '_' + vp.name[1:]
+    #      attribs = {'variable': var_name, 'type': 'input'}
+    #      new = xmlUtils.newNode('alias', text=text.format(var_name), attrib=attribs)
+    #      raven.append(new)
 
     # Now we check for any non-component dispatch variables and assign aliases
     for name in case.dispatch_vars.keys():
@@ -586,7 +605,26 @@ class Template(TemplateBase, Base):
           samps_node.append(xml)
         else:
           samps_node.append(xml)
-
+    
+    valued_params = self._gather_valued_params(components)
+    for comp_name, vps in valued_params.items():
+      for vp_name, vp in vps.items():
+        if vp.is_parametric():
+          vals =  vp.get_value(debug=case.debug['enabled'])
+          unit_name, feature_name = vp_name.split('_', 1)
+          var_name = self.namingTemplates['variable'].format(unit=unit_name, feature=feature_name)
+          # is the variable being swept over?
+          if isinstance(vals, list):
+            # make new Distribution, Sampler.Grid.variable
+            dist, xml = self._create_new_sweep_capacity(comp_name, var_name, vals, sampler)
+            dists_node.append(dist)
+            samps_node.append(xml)
+            # NOTE assumption (input checked): only one interaction per component
+          # if not being swept, then it's just a fixed value.
+          else:
+            samps_node.append(xmlUtils.newNode('constant', text=vals, attrib={'name': var_name}))
+        
+    """
     for component in components:
       interaction = component.get_interaction()
       # NOTE this algorithm does not check for everything to be swept! Future work could expand it.
@@ -615,6 +653,25 @@ class Template(TemplateBase, Base):
         else:
           # this capacity will be evaluated by ARMA/Function, and doesn't need to be added here.
           pass
+      # TODO we also need to look at economic parameters in CashFlow that we need to sample
+      cashflows = component.get_cashflows()
+      for cf in cashflows:
+        vp_vars = cf.get_parametric_params()
+        for vp in vp_vars:
+          # feature_name = vp.name[1:]
+          feature_name = cf.name + '_' + vp.name[1:]
+          if vp.is_parametric():
+            vals = vp.get_value(debug=case.debug['enabled'])
+            var_name = self.namingTemplates['variable'].format(unit=name, feature=feature_name)
+            if isinstance(vals, list):
+              dist, xml = self._create_new_sweep_capacity(name, var_name, vals, sampler)
+              dists_node.append(dist)
+              samps_node.append(xml)
+            else:
+              samps_node.append(xmlUtils.newNode('constant', text=vals, attrib={'name': var_name}))
+          else:
+            pass
+    """
     if case.outerParallel == 0 and case.useParallel:
       #XXX if we had a way to calculate this ahead of time,
       # this could be done in _modify_outer_runinfo
@@ -990,6 +1047,27 @@ class Template(TemplateBase, Base):
     for tag in ['capacities', 'init_disp', 'full_dispatch']:
       groups[tag] = var_groups.find(f".//Group[@name='GRO_{tag}']")
 
+    valued_params = self._gather_valued_params(components)
+    for comp_name, vps in valued_params.items():
+      for vp_name, vp in vps.items():
+        if not vp.is_parametric():
+          continue
+        values = vp.get_value(debug=case.debug['enabled'])
+        if isinstance(values, list):
+          val = 42
+        else:
+          val = values
+        mc.append(xmlUtils.newNode('constant', attrib={'name': vp_name}, text=val))
+        self._updateCommaSeperatedList(groups['capacities'], vp_name)
+    
+    for component in components:
+      for tracker in component.get_tracking_vars():
+        for resource in component.get_resources():
+          var_name = self.namingTemplates['dispatch'].format(component=component.name, tracker=tracker, resource=resource)
+          self._updateCommaSeperatedList(groups['init_disp'], var_name)
+          self._updateCommaSeperatedList(groups['full_dispatch'], var_name)
+
+    """
     # change inner input due to components requested
     for component in components:
       name = component.name
@@ -1021,11 +1099,23 @@ class Template(TemplateBase, Base):
       else:
         raise NotImplementedError(f'Capacity from "{capacity}" not implemented yet. Component: {cap_name}')
 
+      cashflows = component.get_cashflows()  # TODO: we've done this several times now. This should be its own function!
+      for cf in cashflows:
+        for vp in cf.get_parametric_params():
+          cf_name = component.name + '_' + cf.name + vp.name
+          values = vp.get_value(debug=case.debug['enabled'])
+          if isinstane(values, list):
+            cf_val = 42
+          else:
+            cf_val = values
+          mc.append(xmlUtils.newNode('constant', attrib={'name': cf_name}, text=cf_val))
+          self._updateCommaSeperatedList(groups[''], cf_name)
       for tracker in component.get_tracking_vars():
         for resource in component.get_resources():
           var_name = self.namingTemplates['dispatch'].format(component=name, tracker=tracker, resource=resource)
           self._updateCommaSeperatedList(groups['init_disp'], var_name)
           self._updateCommaSeperatedList(groups['full_dispatch'], var_name)
+    """
 
   def _modify_inner_debug(self, template, case, components):
     """
@@ -1559,3 +1649,24 @@ class Template(TemplateBase, Base):
         names.append(out_name)
 
     return names
+
+  def _gather_valued_params(self, components):
+    """
+      TODO 
+    """
+    valued_params = {}
+    for component in components:
+      comp_name = component.name
+      valued_params[comp_name] = {}
+
+      interaction = component.get_interaction()
+      inter_vp_names = interaction.get_valued_param_vars()
+      for vp_name in inter_vp_names:
+        valued_params[comp_name][comp_name + vp_name] = getattr(interaction, vp_name)
+
+      cashflows = component.get_cashflows()
+      for cf in cashflows:
+        for vp in cf.get_parametric_params():
+          valued_params[comp_name][comp_name + '_' + cf.name + vp.name] = vp
+    return valued_params
+
