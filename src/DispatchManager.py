@@ -118,6 +118,24 @@ class DispatchRunner:
     if time_vals is not None:
       pass_vars[time_var] = time_vals
 
+    # This should capture capacities, RTE, economic parameters that are defined
+    # by parametric ValuedParams
+    for comp in self._components:
+      interaction = comp.get_interaction()
+      for vp_name in interaction.get_valued_param_vars():
+        var_name = comp.name + vp_name
+        if var_name in raven_dict:
+          vp = getattr(interaction, vp_name)
+          vp.set_value(raven_dict[var_name][0])
+          pass_vars[var_name] = raven_dict[var_name]
+      cashflows = comp.get_cashflows()
+      for cf in cashflows:
+        for vp in cf.get_parametric_params():
+          var_name = comp.name + '_' + cf.name + vp.name
+          if var_name in raven_dict:
+            vp.set_value(raven_dict[var_name][0])
+            pass_vars[var_name] = raven_dict[var_name]
+
     # TODO references to all ValuedParams should probably be registered somewhere
     # like maybe in the VPFactory, then we can loop through and look for info
     # that we know from Outer and fill in the blanks? Maybe?
