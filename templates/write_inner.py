@@ -23,4 +23,12 @@ def modifyInput(root,mod_dict):
         if const.attrib['name'] == comp+'_capacity':
           const.text = str(cap)
           break
+  
+  # hacky solution to set seed value from CSV
+  random_seed = mc.find('.//constant[@name="random_seed"]')
+  rom_seed = ET.Element('seed')
+  rom_seed.text = random_seed.text
+  load_rom = root.find('.//ROM[@name="Load"]')
+  load_rom.append(rom_seed)
+
   return root
