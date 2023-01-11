@@ -26,9 +26,15 @@ def modifyInput(root,mod_dict):
   
   # hacky solution to set seed value from CSV
   random_seed = mc.find('.//constant[@name="random_seed"]')
-  rom_seed = ET.Element('seed')
-  rom_seed.text = random_seed.text
-  load_rom = root.find('.//ROM[@name="Load"]')
-  load_rom.append(rom_seed)
+  seed_value = random_seed.text.split('.')[0]  # string must be formatted like an int, so drop everything after '.'
+  multirun = root.find('.//MultiRun[@name="arma_sampling"]')
+  multirun.set('re-seeding', seed_value)
+  # NOTE My first attempt used the <seed> tag in the pickledROM, but this does not result in
+  ## deterministic behavior for parallel sampling. The new strategy passes a seed to the
+  ## MultiRun step and the ROM seeds are set directly there in MultiStep initialization.
+  # rom_seed = ET.Element('seed')
+  # rom_seed.text = random_seed.text
+  # load_rom = root.find('.//ROM[@name="Load"]')
+  # load_rom.append(rom_seed)
 
   return root
