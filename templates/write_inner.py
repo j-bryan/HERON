@@ -11,18 +11,15 @@ def modifyInput(root,mod_dict):
   mc = Samplers.find('MonteCarlo')
   if mc is not None:
     # get the amount of denoising
-    denoises = mod_dict['Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises']
-    capacities = {}
-    comps = list(x.split(':')[-1].rsplit('_',1)[0] for x in mod_dict.keys() if '_capacity' in x)
-    for comp in comps:
-      capacities[comp] = mod_dict['Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{}_capacity'.format(comp)]
-
+    denoises = mod_dict.pop('Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises')
     mc.find('samplerInit').find('limit').text = str(denoises)
-    for comp, cap in capacities.items():
-      for const in mc.findall('constant'):
-        if const.attrib['name'] == comp+'_capacity':
-          const.text = str(cap)
-          break
+
+    # Look for variables in Monte Carlo sampler for the other variables
+    for k, v in mod_dict.items():
+      var_name = k.split(':')[-1]
+      sampler_var_node = mc.find(f'.//constant[@name="{var_name}"]')
+      if sampler_var_node is not None:
+        sampler_var_node.text = str(v)
   
   # hacky solution to set seed value from CSV
   random_seed = mc.find('.//constant[@name="random_seed"]')
