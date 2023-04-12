@@ -257,7 +257,7 @@ class Template(TemplateBase, Base):
     if case.useParallel:
       #XXX this doesn't handle non-mpi modes like torque or other custom ones
       mode = xmlUtils.newNode('mode', text='mpi')
-      mode.append(xmlUtils.newNode('runQSUB'))
+      # mode.append(xmlUtils.newNode('runQSUB'))
       if 'memory' in case.parallelRunInfo:
         mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
       for sub in case.parallelRunInfo:
