@@ -264,7 +264,6 @@ class Template(TemplateBase, Base):
     if case.useParallel:
       #XXX this doesn't handle non-mpi modes like torque or other custom ones
       mode = xmlUtils.newNode('mode', text='mpi')
-      mode.append(xmlUtils.newNode('runQSUB'))
       if 'memory' in case.parallelRunInfo:
         mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
       for sub in case.parallelRunInfo:
@@ -495,9 +494,9 @@ class Template(TemplateBase, Base):
       denoises_parent = template.find(".//constant[@name='denoises']/..")
       denoises_parent.remove(denoises_parent.find(".//constant[@name='denoises']"))
       # Remove any GRO_final_return vars that compute Sigma or Var (e.g. var_NPV)
-      final_return_vars = template.find('.//VariableGroups/Group[@name="GRO_outer_results"]')
-      new_final_return_vars = [var for var in final_return_vars.text.split(", ") if "std" not in var and "var" not in var]
-      final_return_vars.text = ', '.join(new_final_return_vars)
+      # final_return_vars = template.find('.//VariableGroups/Group[@name="GRO_outer_results"]')
+      # new_final_return_vars = [var for var in final_return_vars.text.split(", ") if "std" not in var and "var" not in var]
+      # final_return_vars.text = ', '.join(new_final_return_vars)
     else:
       text = 'Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{}'
 
@@ -878,9 +877,9 @@ class Template(TemplateBase, Base):
       multi_run.find('.//Model[@type="EnsembleModel"]').attrib['type'] = "ExternalModel"
 
       # Modify <Group> node containing PP statistics. Remove all STD and VAR variables.
-      gro_final_return = template.find('.//VariableGroups/Group[@name="GRO_final_return"]')
-      new_return_vars = [var for var in gro_final_return.text.split(", ") if "std" not in var and "var" not in var]
-      gro_final_return.text = ', '.join(new_return_vars)
+      # gro_final_return = template.find('.//VariableGroups/Group[@name="GRO_final_return"]')
+      # new_return_vars = [var for var in gro_final_return.text.split(", ") if "std" not in var and "var" not in var]
+      # gro_final_return.text = ', '.join(new_return_vars)
 
       # Create a new <DataObject> that will store the csv data
       ## TODO I think this will break input if multiple CSV sources
@@ -919,10 +918,10 @@ class Template(TemplateBase, Base):
       models.remove(models.find('.//EnsembleModel[@name="sample_and_dispatch"]'))
 
       # Remove PP Statistics that are no longer needed
-      self.raiseAMessage('Using Static History - removing unneeded post-processor statistics "sigma" & "variance"')
-      post_proc = models.find(".//PostProcessor")
-      for sigma_node in it.chain(post_proc.findall(".//sigma"), post_proc.findall(".//variance")):
-        post_proc.remove(sigma_node)
+      # self.raiseAMessage('Using Static History - removing unneeded post-processor statistics "sigma" & "variance"')
+      # post_proc = models.find(".//PostProcessor")
+      # for sigma_node in it.chain(post_proc.findall(".//sigma"), post_proc.findall(".//variance")):
+      #   post_proc.remove(sigma_node)
 
       # Modify <Samplers> to get rid of MonteCarlo reference in favor of CustomSampler
       samps = template.find("Samplers")

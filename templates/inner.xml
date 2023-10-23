@@ -2,7 +2,7 @@
   <RunInfo>
     <JobName></JobName>
     <WorkingDir>.</WorkingDir>
-    <Sequence>arma_sampling, summarize, database</Sequence>
+    <Sequence>arma_sampling, write_metrics, summarize, database</Sequence>
     <batchSize>1</batchSize>
   </RunInfo>
 
@@ -23,6 +23,10 @@
       <Output class='DataObjects' type='PointSet'>metrics_stats</Output>
       <!-- <Output class='OutStreams' type='Print'>disp_results</Output> -->
     </PostProcess>
+    <IOStep name="write_metrics">
+      <Input class='DataObjects' type='DataSet'>arma_metrics</Input>
+      <Output class='OutStreams' type='Print'>all_metrics</Output>
+    </IOStep>
     <IOStep name="database">
       <Input class='DataObjects' type='PointSet'>metrics_stats</Input>
       <Output class='Databases' type='NetCDF'>disp_results</Output>
@@ -129,6 +133,10 @@
     <Print name='disp_results'>
       <type>csv</type>
       <source>metrics_stats</source>
+    </Print>
+    <Print name='all_metrics'>
+      <type>csv</type>
+      <source>arma_metrics</source>
     </Print>
   </OutStreams>
 
