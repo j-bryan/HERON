@@ -901,4 +901,63 @@ class DispatchManager(ExternalModelPluginBase):
     dispatch, metrics, tot_activity = runner.run(raven_vars)
     runner.save_variables(raven, dispatch, metrics, tot_activity)
 
+  def createNewInput(self, raven, myInput, samplerType, **kwargs):
+    """
+      This function will return a new input to be submitted to the model, it is called by the sampler.
+      @ In, raven, ravenframework.utils.utils.Object, externalizable RAVEN object
+      @ In, myInput, list, the inputs (list) to start from to generate the new one
+      @ In, samplerType, string, is the type of sampler that is calling to generate a new input
+      @ In, **kwargs, dict,  is a dictionary that contains the information coming from the sampler,
+           a mandatory key is the sampledVars'that contains a dictionary {'name variable':value}
+      @ Out, newInput, dict, new input dict for the HERON dispatcher
+    """
+    # newInput dict needs to include info on sampled variables.
+    newInput = {k: np.atleast_1d(v) for k, v in kwargs.get("SampledVars", {}).items()}
 
+    # In the case of static histories, the history information might not be provided through a sampler
+    # and instead be found in a DataObject in the myInput list. If that's the case, we need to add all
+    # indices and signals from the DataObject into the newInput dict as if they were sampled values.
+    # We assert here that there must be EXACTLY ONE element in myInput. That one data object must be
+    # either named "dispatch_placeholder" or is treated as having a static history signal.
+    if len(myInput) != 1:
+      raise TypeError("HERON.DispatchManager model must receive exactly 1 DataObject as an input! "
+                     f"Received: {len(myInput)} inputs of types {[type(inp) for inp in myInput]}.")
+
+    data_obj = myInput[0]
+    # If the data object is just the dispatch placeholder, there's nothing else we need to add.
+    # FIXME: Can we handle this in a way that doesn't rely on naming conventions? Note that the
+    #        dispatch_placeholder object isn't necessarily required, so we DON'T want to throw
+    #        an error is dispatch_placeholder isn't present.
+    if data_obj.name == "dispatch_placeholder":
+      return newInput
+
+    # Otherwise, we assume the data object must hold a static history data set. We add this to the
+    # sampled variables.
+    print("A StaticHistory has been provided! Adding to sampled variables.")
+    # TODO: Support more flexible inputs for static histories. Any reason to not allow users to use a
+    # PointSet or a HistorySet to specify a static history?
+    if data_obj.__class__.__name__ != "DataSet":
+      raise TypeError("The fixed time series data set (StaticHistory) must be provided as a DataSet. "
+                     f"Received: {type(data_obj)}.")
+
+    # Get index and variable names from the DataSet
+    data, meta = data_obj.getData()
+    indexes = list(data.indexes.keys())
+    variables = set(data.variables.keys()) - set(indexes)
+    indexes.remove("RAVEN_sample_ID")  # FIXME: CSV source for DataSet must include RAVEN_sample_ID, but this
+                                       # isn't a useful index for a single history. Will cause issues if we
+                                       # don't get rid of it here, but it's ugly to have to include this.
+
+    # Add the DataObject indexes and variables to newInput
+    extracted_values = {k: np.squeeze(np.atleast_1d(data.variables.get(k))) for k in set(indexes) | variables}
+    newInput.update(extracted_values)
+
+    # Create an _indexMap for the extracted values. RAVEN makes this as a dict wrapped in a numpy array for
+    # some reason, so we need to mimic that here.
+    index_map = np.array([{var_name: indexes for var_name in variables}])  # FIXME: Fails if indexes list is in a different order than expected. Can we make this robust to list order?
+    # NOTE: The cause of the index name list order issue comes from the DispatchRunner._slice_signals method implementation, which looks at the index of the macro and time step index names
+    # to slice the signal. If the order of the index names is wrong in the index map, the _slice_signals method slices along the wrong axis. We'll leave this be for now, but a more robust
+    # solution to time history slicing would be useful.
+    newInput["_indexMap"] = index_map
+
+    return newInput
