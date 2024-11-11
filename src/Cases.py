@@ -1362,26 +1362,25 @@ class Case(Base):
       @ Out, None
     """
     # load templates
-    template_class = self._load_template()
-    inner, outer = template_class.createWorkflow(self, components, sources)
-
-    template_class.writeWorkflow((inner, outer), loc)
+    driver = self._load_template(components, sources)
+    driver.create_workflows(self, components, sources)
+    driver.write_workflows(loc)
 
   #### UTILITIES ####
-  def _load_template(self):
+  def _load_template(self, components, sources):
     """
       Loads template files for modification
-      @ In, None
-      @ Out, template_class, RAVEN Template, instantiated Template class
+      @ In, components, HERON components, components for the simulation
+      @ In, sources, HERON sources, sources for the simulation
+      @ Out, template_class, TemplateDriver, instantiated TemplateDriver class
     """
     src_dir = os.path.dirname(os.path.realpath(__file__))
     heron_dir = os.path.abspath(os.path.join(src_dir, '..'))
     template_dir = os.path.abspath(os.path.join(heron_dir, 'templates'))
-    template_name = 'template_driver'
+    template_name = 'template_drivers'
     # import template module
     sys.path.append(heron_dir)
     module = importlib.import_module(f'templates.{template_name}', package="HERON")
     # load template, perform actions
-    template_class = module.Template(messageHandler=self.messageHandler)
-    template_class.loadTemplate(template_dir)
-    return template_class
+    driver = module.create_template_driver(self, components, sources)
+    return driver
