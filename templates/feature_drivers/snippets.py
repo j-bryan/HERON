@@ -25,7 +25,7 @@ class EntityNode(ET.Element):
 
 class AssemblerNode(ET.Element):
   """
-  Assember nodes to go in Steps
+  Assembler nodes to go in Steps
   """
   def __init__(self, tag, className, typeName, text):
     attrib = {"class": className,

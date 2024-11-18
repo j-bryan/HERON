@@ -1361,26 +1361,25 @@ class Case(Base):
       @ In, loc, str, location in which to write files
       @ Out, None
     """
-    # load templates
-    driver = self._load_template(components, sources)
-    driver.create_workflows(self, components, sources)
-    driver.write_workflows(loc)
+    # Load templates, create RAVEN workflows, and write those workflows using a TemplateDriver
+    driver = self._make_template_driver()
+    workflows = driver.create_workflows(self, components, sources)  # list[RavenTemplate]
+    for workflow in workflows:
+      workflow.writeWorkflow(loc)
 
   #### UTILITIES ####
-  def _load_template(self, components, sources):
+  def _make_template_driver(self):
     """
       Loads template files for modification
-      @ In, components, HERON components, components for the simulation
-      @ In, sources, HERON sources, sources for the simulation
+      @ In, None
       @ Out, template_class, TemplateDriver, instantiated TemplateDriver class
     """
     src_dir = os.path.dirname(os.path.realpath(__file__))
     heron_dir = os.path.abspath(os.path.join(src_dir, '..'))
-    template_dir = os.path.abspath(os.path.join(heron_dir, 'templates'))
     template_name = 'template_drivers'
     # import template module
     sys.path.append(heron_dir)
     module = importlib.import_module(f'templates.{template_name}', package="HERON")
     # load template, perform actions
-    driver = module.create_template_driver(self, components, sources)
+    driver = module.TemplateDriver()
     return driver

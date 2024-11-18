@@ -20,10 +20,13 @@ class FeatureDriver:
   FeatureDrivers translate HERON features to RAVEN workflow template changes. This makes feature
   logic more portable across different templates.
   """
-  @property
-  @abstractmethod
-  def allowed_templates(self):
-    pass
+  def __init__(self, name: str):
+    """
+    Feature driver constructor
+
+    @ In, name, str, name of the feature
+    """
+    self.name = name
 
   def edit_template(self, template, case, components, sources):
     """

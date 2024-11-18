@@ -31,8 +31,11 @@ class GridSampler(FeatureDriver):
       node.text = value
 
     # TODO: this is modifying distributions
+
+  def _modify_distributions(self, template, case, components, sources):
+    dists_node = template.find("")
     for key, value in case.dispatch_vars.items():
-      var_name = self.namingTemplates['variable'].format(unit=key, feature='dispatch')
+      var_name = template.namingTemplates['variable'].format(unit=key, feature='dispatch')
       vals = value.get_value(debug=case.debug['enabled'])
       if isinstance(vals, list):
         dist, xml = self._create_new_sweep_capacity(key, var_name, vals, sampler)
