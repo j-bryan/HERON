@@ -33,6 +33,10 @@ class AssemblerNode(ET.Element):
     super().__init__(tag, attrib)
     self.text = text
 
+  @classmethod
+  def from_entity(cls, tag, entity):
+    return cls(tag=tag, className=entity.get_class(), typeName=entity.get_type(), text=entity.get_name())
+
 class StepNode(ET.Element):
   """
   Steps to go in <Steps> block

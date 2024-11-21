@@ -14,14 +14,14 @@ import itertools as it
 import numpy as np
 import dill as pk
 
-from .raven_templates import (FlatOneHistoryTemplate,
-                              FlatFixedCapacitiesTemplate,
+from .raven_templates import (OneHistoryTemplate,
+                              DispatchTemplate,
                               BilevelOuterTemplate,
                               BilevelInnerTemplate)
-from .feature_drivers.samplers import GridSampler, CustomSampler, MonteCarloSampler
-from .feature_drivers.optimizers import BayesianOptimizer, GradientDescent
-from .feature_drivers.debug import DebugPlots
-from .feature_drivers.histories import StaticHistory, SyntheticHistory
+from .features.samplers import GridSampler, CustomSampler, MonteCarloSampler
+from .features.optimizers import BayesianOptimizer, GradientDescent
+from .features.debug import DebugPlots
+from .features.histories import StaticHistory, SyntheticHistory
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -38,8 +38,8 @@ from ravenframework.InputTemplates.TemplateBaseClass import Template as Template
 sys.path.pop()
 
 from .raven_templates import (RavenTemplate,
-                              FlatFixedCapacitiesTemplate,
-                              FlatOneHistoryTemplate,
+                              OneHistoryTemplate,
+                              DispatchTemplate,
                               BilevelOuterTemplate,
                               BilevelInnerTemplate)
 
@@ -57,71 +57,16 @@ class TemplateDriver(Base):
   def create_workflows(self, case, components, sources) -> list[RavenTemplate]:
     # Flat or bilevel template?
     if self._all_capacities_fixed(components) or case.debug["enabled"]:  # Can use flat inner
-      self._create_flat_workflow_const_caps(case, components, sources)
+      self._templates = [DispatchTemplate()]
     elif self._uses_one_history(case, sources) and not self._has_uncertain_variable_costs(case, components, sources):  # Can use flat outer
-      self._create_flat_workflow_one_history(case, components, sources)
+      self._templates = [OneHistoryTemplate()]
     else:  # Use bi-level formulation
-      self._create_bilevel_workflow(case, components, sources)
+      self._templates = [BilevelOuterTemplate(), BilevelInnerTemplate()]
 
-    workflows = list(template.createWorkflow() for template in self._templates)
+    workflows = list(template.createWorkflow(case, components, sources) for template in self._templates)
     return workflows
 
   def write_workflows(self, loc):
-    pass
-
-  #############################
-  # Workflow creation helpers #
-  #############################
-  def _create_flat_workflow_const_caps(self, case, components, sources):
-    template = FlatFixedCapacitiesTemplate()
-    return template
-
-  def _create_flat_workflow_one_history(self, case, components, sources):
-    template = FlatOneHistoryTemplate()
-    return template
-
-  def _create_bilevel_workflow(self, case, components, sources):
-    outer = BilevelOuterTemplate()
-    inner = BilevelInnerTemplate()
-
-    # All bilevel workflows use a RAVEN-runs-RAVEN scheme for the "inner" level
-    code_name = outer.namingTemplates.get("model_name", "raven")
-    outer.add_features(RavenCode(name=code_name))
-
-    # sweep or opt?
-    if case.get_mode() == "sweep":
-      sampler_name = outer.namingTemplates.get("sampler_name", "sampler")
-      outer.add_features(
-        GridSampler(name=sampler_name),
-        SweepMultiRun(name="sweep", sampler=sampler_name, model=code_name)
-      )
-    elif case.get_mode() == "opt":
-      opt_name = outer.namingTemplates.get("optimizer_name", "opt")
-      outer.add_features(
-        self._define_optimizer_feature(case, name=opt_name),
-        OptimizationSettings(optimizer=opt_name),
-        OptMultiRun(name=opt_name)
-      )
-    else:  # TODO: Define new bi-level workflows here
-      # should never make it here but who knows
-      raise ValueError(f"Unknown mode {case.get_mode()}")
-
-    # Other options?
-
-  def _define_optimizer_feature(self, case, name="opt"):
-    opt_strategy = case.get_opt_strategy()
-    if opt_strategy == "BayesianOpt":
-      optimizer = BayesianOptimizer(name=name)
-    elif opt_strategy == "GradientDescent":
-      optimizer = GradientDescent(name=name)
-    else:
-      raise ValueError(f"Unrecognized optimization strategy {opt_strategy}.")
-    return optimizer
-
-  def _define_time_history_source(self, case, sources, name="time_history"):
-    pass
-
-  def _load_template(self, loc):
     pass
 
   ###################

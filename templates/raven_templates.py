@@ -10,7 +10,10 @@ import sys
 import os
 import xml.etree.ElementTree as ET
 
-from .feature_drivers import FeatureDriver
+from .features.base import Feature
+from .features.steps import Step, MultiRunStep, IOStep, PostProcessStep
+from .features.samplers import GridSampler
+from .features.optimizers import BayesianOptimizer, GradientDescentOptimizer
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -47,7 +50,8 @@ class RavenTemplate(Template):
 
   def __init__(self):
     super().__init__()
-    self.features = []
+    self.features = []  # list[Feature], which features to add
+    self.sequence = []  # list[Step], sequence of steps to set in RunInfo/Sequence block
 
   ######################
   # RAVEN Template API #
@@ -57,7 +61,7 @@ class RavenTemplate(Template):
     # load XML from file
     pass
 
-  def createWorkflow(self, case: Case, components: list[Component], sources: list[CSV | ARMA]):
+  def createWorkflow(self, case: Case, components: list[Component], sources: list[CSV | ARMA]) -> "RavenTemplate":
     """
     Create workflow by applying feature changes to the template XML
 
@@ -66,8 +70,10 @@ class RavenTemplate(Template):
     @ In, sources, TODO
     @ Out, None
     """
+    self.set_features(case, components, sources)  # NOTE: Overwrite the set_features function in child classes
     for feature in self.features:
       feature.edit_template(self._template, case, components, sources)
+    self.set_sequence()
     return self
 
   def writeWorkflow(self):
@@ -102,30 +108,113 @@ class RavenTemplate(Template):
   ################################
   # Feature modification methods #
   ################################
-  def add_features(self, *feats: FeatureDriver):
+  def set_features(self, case, components, sources) -> None:
     """
-    Add features to the template XML
+    Sets a list of features based on case, component, and source information.
 
-    @ In, feats, FeatureDriver, one or more features to add to the template XML
+    @ In, case
+    @ In, components,
+    @ In, sources,
     @ Out, None
     """
-    self.features.extend(feats)
+    # In this RavenTemplate parent class, apply any edits which apply to all RAVEN templates
+    # TODO: RunInfo block edits?
+    pass
+
+  def set_sequence(self) -> None:
+    # TODO: validate/determine sequence based on operations with DataObjects?
+    sequence = self.find("RunInfo/Sequence")
+    sequence.text = ", ".join([step.get_name() for step in self.sequence])
 
 # Templates for specific workflow types
-class FlatOneHistoryTemplate(Template):
-  Template.addNamingTemplates({"model_name": "dispatch"})
+class OneHistoryTemplate(Template):
+  pass
 
-
-class FlatFixedCapacitiesTemplate(Template):
-  Template.addNamingTemplates({"model_name": "dispatch"})
-
+class DispatchTemplate(Template):
+  pass
 
 class BilevelOuterTemplate(Template):
-  Template.addNamingTemplates({"model_name": "raven",
-                               "sampler_name": "sampler",
-                               "optimize_namer": "opt"})
+  Template.addNamingTemplate({
+    "optimizer": "cap_opt",
+    "model": "raven"
+  })
+
+  def set_features(self, case, components, sources) -> None:
+    """
+    Sets a list of features based on case, component, and source information.
+
+    @ In, case
+    @ In, components,
+    @ In, sources,
+    @ Out, None
+    """
+    super().set_features(case, components, sources)
+    if case.get_mode() == "sweep":
+      self._set_sweep_features(case, components, sources)
+    elif case.get_mode() == "opt":
+      self._set_opt_features(case, components, sources)
+    else:
+      # Shouldn't ever reach here
+      raise ValueError(f"Unknown case mode '{case.get_mode()}'. Must be one of ['sweep', 'opt'].")
+
+  def _set_sweep_features(self, case, components, sources) -> None:
+    # - Sweep data objects: grid
+    grid = PointSet("grid")
+    # - Sweep outstream print
+    sweep_print = PrintOutStream("sweep", grid)
+    # - Grid sampler (make interchangeable??)
+    sampler = GridSampler("grid")
+    # - Sweep multirun
+    multirun = MultiRunStep("sweep")
+    # - Print iostep
+    print_step = IOStep("print", sweep_print)
+
+    # Add features to the template's self.features list
+    sweep_features = [grid, sweep_print, sampler, multirun, sweep_print]
+    self.features.extend(sweep_features)
+    self.sequence.extend([multirun, sweep_print])
+
+  def _set_opt_features(self, case, components, sources) -> None:
+    # - Optimizer DataObjects: opt_eval, opt_soln
+    opt_eval = PointSet("opt_eval")
+    opt_soln = PointSet("opt_soln")
+    # - Optimizer OutStreams: opt_soln print, opt_soln plot
+    opt_soln_print = PrintOutStream("opt_soln", opt_soln)
+    opt_path_plot = PlotOutStream("opt_path", opt_soln)
+    # - Optimizer settings
+    #     - BO: BO optimizer, stratified sampler, GP ROM
+    #     - GD: GD optimizer
+    if case.get_opt_strategy() == "BayesianOpt":
+      optimizer = BayesianOptimizer("cap_opt")
+    elif case.get_opt_strategy() == "GradientDescent":
+      optimizer = GradientDescent("cap_opt")
+    else:
+      raise ValueError(f"Unrecognized optimization strategy {case.get_opt_strategy()}.")
+    #     - OptimizationSettings handed to either optimizer to fill out common settings
+    opt_settings = OptimizationSettings(optimizer="cap_opt")
+    # - Optimize multirun
+    multirun = MultiRunStep("optimize")  # add model, optimizer, etc.
+    # - Output IOSteps
+    print_step = IOStep("print", opt_soln_print)
+    plot_step = IOStep("plot", opt_path_plot)
+
+    opt_features = [opt_eval, opt_soln, opt_soln_print, opt_path_plot,
+                    optimizer, opt_settings, multirun, print_step, plot_step]
+    self.features.extend(opt_features)
+    self.sequence.extend([multirun, print_step, plot_step])
 
 
 class BilevelInnerTemplate(Template):
   Template.addNamingTemplates({"model_name": "dispatch",
                                "sampler_name": "sampler"})
+
+  def set_features(self, case, components, sources) -> None:
+    """
+    Sets a list of features based on case, component, and source information.
+
+    @ In, case
+    @ In, components,
+    @ In, sources,
+    @ Out, None
+    """
+    pass
