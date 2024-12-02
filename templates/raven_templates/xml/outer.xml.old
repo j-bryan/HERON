@@ -1,55 +1,67 @@
-<Simulation verbosity="all">
+<Simulation verbosity='all'>
   <RunInfo>
     <JobName></JobName>
     <WorkingDir>.</WorkingDir>
-    <Sequence>optimize, plot</Sequence>
+    <Sequence></Sequence>
     <batchSize>1</batchSize>
   </RunInfo>
 
   <Steps>
+    <MultiRun name='sweep'>
+      <Input          class='Files'       type='raven'   >inner_workflow</Input>
+      <Input          class='Files'       type=''        >heron_lib</Input>
+      <Model          class='Models'      type='Code'    >raven</Model>
+      <Sampler        class='Samplers'    type='Grid'    >grid</Sampler>
+      <Output         class='DataObjects' type='PointSet'>grid</Output>
+      <Output         class='OutStreams'  type='Print'   >sweep</Output>
+    </MultiRun>
     <MultiRun name="optimize">
-      <Input          class="Files"       type="raven"           >inner_workflow</Input>
-      <Input          class="Files"       type=""                >heron_lib</Input>
-      <Model          class="Models"      type="Code"            >raven</Model>
-      <Optimizer      class="Optimizers"  type="GradientDescent" >cap_opt</Optimizer>
-      <Output         class="DataObjects" type="PointSet"        >opt_eval</Output>
-      <SolutionExport class="DataObjects" type="PointSet"        >opt_soln</SolutionExport>
-      <Output         class="OutStreams"  type="Print"           >opt_soln</Output>
+      <Input          class='Files'       type='raven'           >inner_workflow</Input>
+      <Input          class='Files'       type=''                >heron_lib</Input>
+      <Model          class='Models'      type='Code'            >raven</Model>
+      <Optimizer      class='Optimizers'  type='GradientDescent' >cap_opt</Optimizer>
+      <Output         class='DataObjects' type='PointSet'        >opt_eval</Output>
+      <SolutionExport class='DataObjects' type='PointSet'        >opt_soln</SolutionExport>
+      <Output         class='OutStreams'  type='Print'           >opt_soln</Output>
     </MultiRun>
     <IOStep name="plot">
-      <Input  class="DataObjects" type="PointSet">opt_soln</Input>
-      <Output class="OutStreams"  type="Plot"    >opt_path</Output>
-      <Output class="OutStreams"  type="Print"   >opt_soln</Output>
+      <Input  class='DataObjects' type='PointSet'>opt_soln</Input>
+      <Output class='OutStreams'  type='Plot'    >opt_path</Output>
+      <Output class='OutStreams'  type='Print'   >opt_soln</Output>
     </IOStep>
   </Steps>
 
   <VariableGroups>
-    <Group name="GRO_capacities"></Group>
-    <Group name="GRO_outer_results"></Group>
-    <Group name="GRO_outer_debug_dispatch"></Group>
-    <Group name="GRO_outer_debug_synthetics"></Group>
-    <Group name="GRO_outer_debug_cashflows"></Group>
+    <Group name='GRO_capacities'></Group>
+    <Group name='GRO_outer_results'></Group>
+    <Group name='GRO_outer_debug_dispatch'></Group>
+    <Group name='GRO_outer_debug_synthetics'></Group>
+    <Group name='GRO_outer_debug_cashflows'></Group>
   </VariableGroups>
 
   <DataObjects>
-    <PointSet name="opt_eval">
+    <PointSet name='grid'>
       <Input>GRO_capacities</Input>
       <Output>GRO_outer_results</Output>
     </PointSet>
-    <PointSet name="opt_soln">
+    <PointSet name='opt_eval'>
+      <Input>GRO_capacities</Input>
+      <Output>GRO_outer_results</Output>
+    </PointSet>
+    <PointSet name='opt_soln'>
       <Input>trajID</Input>
       <Output>iteration, accepted, GRO_capacities, GRO_outer_results</Output>
     </PointSet>
   </DataObjects>
 
   <Models>
-    <Code name="raven" subType="RAVEN">
+    <Code name='raven' subType='RAVEN'>
       <executable>~/projects/raven/raven_framework</executable>
       <outputDatabase>disp_results</outputDatabase>
       <conversion>
-        <input source="write_inner.py"/>
+        <input source='write_inner.py'/>
       </conversion>
-      <alias variable="denoises" type="input">Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises</alias>
+      <alias variable='denoises' type='input'>Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises</alias>
     </Code>
     <ROM name="gpROM" subType="GaussianProcessRegressor">
       <Features></Features>
@@ -68,6 +80,9 @@
   </Distributions>
 
   <Samplers>
+    <Grid name='grid'>
+      <constant name='denoises'>1</constant>
+    </Grid>
     <Stratified name="LHS_samp">
       <samplerInit/>
     </Stratified>
@@ -76,7 +91,7 @@
   <Optimizers>
     <GradientDescent name="cap_opt">
       <objective>mean_NPV</objective>
-        <constant name="denoises">1</constant>
+      <constant name='denoises'>1</constant>
       <TargetEvaluation class="DataObjects" type="PointSet">opt_eval</TargetEvaluation>
       <samplerInit>
         <limit>800</limit>
@@ -104,7 +119,7 @@
     </GradientDescent>
     <BayesianOptimizer name="cap_opt">
       <objective>mean_NPV</objective>
-      <constant name="denoises">1</constant>
+      <constant name='denoises'>1</constant>
       <TargetEvaluation class="DataObjects" type="PointSet">opt_eval</TargetEvaluation>
       <samplerInit>
         <limit>100</limit>
@@ -144,23 +159,23 @@
   </Optimizers>
 
   <Files>
-    <Input name="inner_workflow" type="raven">inner.xml</Input>
+    <Input name="inner_workflow" type='raven'>inner.xml</Input>
     <Input name="heron_lib">../heron.lib</Input>
   </Files>
 
   <OutStreams>
-    <Print name="sweep">
+    <Print name='sweep'>
       <type>csv</type>
       <source>grid</source>
     </Print>
-    <Print name="opt_soln">
+    <Print name='opt_soln'>
       <type>csv</type>
       <source>opt_soln</source>
       <clusterLabel>trajID</clusterLabel>
     </Print>
     <Plot name="opt_path" subType="OptPath">
       <source>opt_soln</source>
-      <vars>GRO_capacities</vars>
+      <vars>GRO_capacities, mean_NPV</vars>
     </Plot>
   </OutStreams>
 </Simulation>

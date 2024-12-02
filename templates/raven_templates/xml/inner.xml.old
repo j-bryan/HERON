@@ -84,7 +84,6 @@
   <Databases>
     <NetCDF name="disp_results" readMode="overwrite" directory=""/>
     <NetCDF name="disp_full" readMode="overwrite" directory=""/>
-    <NetCDF name="disp_debug" readMode="overwrite" directory=""/>
   </Databases>
 
   <Models>
@@ -119,6 +118,11 @@
       <constant name='scaling'>1.0</constant>
     </MonteCarlo>
   </Samplers>
+
+  <Databases>
+    <NetCDF name="disp_debug" readMode="overwrite" directory=""/>
+    <NetCDF name="disp_results" readMode="overwrite" directory=""/>
+  </Databases>
 
   <OutStreams>
     <Print name='disp_debug'>

@@ -1,9 +1,9 @@
 import xml.etree.ElementTree as ET
 
-from .base import Feature, Entity
+from .base import RavenSnippet
 
 
-class Database(Feature, Entity):
+class Database(RavenSnippet):
   def __init__(self,
                name: str,
                type_name: str,
@@ -40,7 +40,7 @@ class Database(Feature, Entity):
     # Add variables to settings so Entity.to_xml() will add the <variables> child node
     if self.variables:
       vars = ", ".join(self.variables)
-      self.add_settings(variables=vars)
+      self.add_subelements(variables=vars)
 
     # Create node and set additional attributes
     node = super().to_xml()
@@ -73,7 +73,7 @@ class Database(Feature, Entity):
 
   @property
   def filename(self) -> str:
-    return self.attrib.get("filename", f"{self.name}.{'h5' if self.get_type() == "HDF5" else 'nc'}")
+    return self.attrib.get("filename", f"{self.name}.{'h5' if self.get_type() == 'HDF5' else 'nc'}")
 
   @filename.setter
   def filename(self, filename: str) -> None:
