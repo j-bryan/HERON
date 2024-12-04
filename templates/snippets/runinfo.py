@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet
+from .base import RavenSnippet, node_property
 from .steps import Step
 from ..xml_utils import find_node
 
@@ -13,6 +13,13 @@ class Sequence(RavenSnippet):
     # TODO: Storing Step objects instead of just their names could let us dynamically decide the order of steps by
     # looking at step inputs and outputs.
     self._steps = []  # list[str]
+
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "Sequence":
+    sequence = cls()
+    if node.text:
+      sequence._steps = [step.strip() for step in node.text.split(",")]
+    return sequence
 
   def add_step(self, step: Step | str, index: int | None = None) -> None:
     # Make sure we're not duplicating steps by name
@@ -30,18 +37,19 @@ class Sequence(RavenSnippet):
 class RunInfo(RavenSnippet):
   tag = "RunInfo"
 
-  def __init__(self) -> None:
-    super().__init__()
-    # Save required nodes as attributes for easy access
-    # The ugly naming convention helps to access the attributes from the node names. These names are
-    # hidden to external code, with access provided through properties with pythonic names.
-    self._JobName = ET.SubElement(self, "JobName")
-    self._WorkingDir = ET.SubElement(self, "WorkingDir")
-    self._WorkingDir.text = "."
-    self._Sequence = Sequence()
-    self.append(self._Sequence)
-    self._batchSize = ET.SubElement(self, "batchSize")
-    self._batchSize.text = 1
+  @classmethod
+  def _create_accessors(cls):
+    """
+    A shorthand for creating class properties to get and set node attributes and subnode text
+    @ In, None
+    @ Out, None
+    """
+    super()._create_accessors()
+    node_property(cls, "job_name", "JobName", default="")
+    node_property(cls, "working_dir", "WorkingDir", default="")
+    node_property(cls, "batch_size", "batchSize", default=1)
+    node_property(cls, "internal_parallel", "InternalParallel", default=False)
+    node_property(cls, "num_mpi", "NumMPI")
 
   @classmethod
   def from_xml(cls, node: ET.Element) -> "RunInfo":
@@ -50,18 +58,12 @@ class RunInfo(RavenSnippet):
     @ In, node, ET.Element, the template XML
     @ Out, run_info, RunInfo, new RunInfo block object
     """
-    run_info = RunInfo()
+    run_info = cls()
     # Set RunInfo object values based on existing XML
     for sub in node:
       if sub.tag == "Sequence":
-        if not sub.text:
-          continue
-        for step_name in sub.text.split(","):
-          run_info.add_step_to_sequence(step_name.strip())
-      elif hasattr(run_info, f"_{sub.tag}"):
-        attr = getattr(run_info, f"_{sub.tag}")
-        attr.attrib = sub.attrib
-        attr.text = sub.text
+        sequence = Sequence.from_xml(sub)
+        run_info.append(sequence)
       else:
         run_info.append(sub)
     return run_info
@@ -79,49 +81,55 @@ class RunInfo(RavenSnippet):
       par_info_sub.text = value
 
   def add_step_to_sequence(self, step: Step) -> None:
-    self._Sequence.add_step(step)
+    sequence = self.find("Sequence")
+    if sequence is None:
+      sequence = Sequence()
+      self.append(sequence)
+    sequence.add_step(step)
 
   # Attribute accessors
-  @property
-  def job_name(self) -> str:
-    return self._JobName.text
+  # @property
+  # def job_name(self) -> str:
+  #   node = self.find("JobName")
+  #   return False if node is None else node.text
 
-  @job_name.setter
-  def job_name(self, val: str) -> None:
-    self._JobName.text = val
+  # @job_name.setter
+  # def job_name(self, val: str) -> None:
+  #   find_node(self, "JobName").text = val
 
-  @property
-  def working_dir(self) -> str:
-    return self._WorkingDir.text
+  # @property
+  # def working_dir(self) -> str:
+  #   node = self.find("WorkingDir")
+  #   return False if node is None else node.text
 
-  @working_dir.setter
-  def working_dir(self, val: str) -> None:
-    self._WorkingDir.text = val
+  # @working_dir.setter
+  # def working_dir(self, val: str) -> None:
+  #   find_node(self, "WorkingDir").text = val
 
-  @property
-  def batch_size(self) -> str:
-    return self._batchSize.text
+  # @property
+  # def batch_size(self) -> str:
+  #   node = self.find("batchSize")
+  #   return False if node is None else node.text
 
-  @batch_size.setter
-  def batch_size(self, val: str) -> None:
-    self._batchSize.text = val
+  # @batch_size.setter
+  # def batch_size(self, val: int) -> None:
+  #   find_node(self, "batchSize").text = val
 
-  @property
-  def internal_parallel(self) -> bool:
-    node = self.find("internalParallel")
-    return False if node is None else node.text
+  # @property
+  # def internal_parallel(self) -> bool:
+  #   node = self.find("internalParallel")
+  #   return False if node is None else node.text
 
-  @internal_parallel.setter
-  def internal_parallel(self, val: bool) -> None:
-    node = find_node(self, "internalParallel")
-    node.text = val
+  # @internal_parallel.setter
+  # def internal_parallel(self, val: bool) -> None:
+  #   node = find_node(self, "internalParallel")
+  #   node.text = val
 
-  @property
-  def num_mpi(self) -> int:
-    node = self.find("NumMPI")
-    return False if node is None else node.text
+  # @property
+  # def num_mpi(self) -> int:
+  #   node = self.find("NumMPI")
+  #   return False if node is None else node.text
 
-  @num_mpi.setter
-  def num_mpi(self, val: int) -> None:
-    node = find_node(self, "NumMPI")
-    node.text = val
+  # @num_mpi.setter
+  # def num_mpi(self, val: int) -> None:
+  #   find_node(self, "NumMPI").text = val

@@ -15,14 +15,18 @@ class DataObject(RavenSnippet):
     self._outputs = []
 
   def add_inputs(self, *inputs: str | VariableGroup) -> None:
+    if isinstance(inputs[0], list) and len(inputs) == 1:
+      # A list got passed in instead of many positional arguments (no star used)
+      inputs = inputs[0]
     self._inputs.extend(inputs)
-    input_node = find_node(self, "Input")
-    input_node.text = self._inputs
+    find_node(self, "Input").text = self._inputs
 
   def add_outputs(self, *outputs: str | VariableGroup) -> None:
+    if isinstance(outputs[0], list) and len(outputs) == 1:
+      # A list got passed in instead of many positional arguments (no star used)
+      outputs = outputs[0]
     self._outputs.extend(outputs)
-    output_node = find_node(self, "Output")
-    output_node.text = self._outputs
+    find_node(self, "Output").text = self._outputs
 
 
 class PointSet(DataObject):

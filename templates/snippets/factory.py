@@ -1,5 +1,19 @@
+import sys
+import os
 import xml.etree.ElementTree as ET
+
 from .base import RavenSnippet
+from . import distributions
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+import HERON.src._utils as hutils
+sys.path.pop()
+
+RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
+
+sys.path.append(os.path.join(RAVEN_LOC, '..'))
+from ravenframework.Distributions import returnInputParameter
+sys.path.pop()
 
 
 def get_all_subclasses(cls):
@@ -64,6 +78,17 @@ class SnippetFactory:
     if subtype := node.get("subType", None):
       key += f"[@subType='{subtype}']"
     return key
+
+
+# There are many allowable distributions, each of which have their own properties. Rather than manually create classes for those,
+# we can read from the RAVEN distributions input specs and dynamically create RavenSnippet classes for those distributions.
+
+dist_collection = returnInputParameter()
+for sub in dist_collection.subs:
+  # We create a new distribution class for every RAVEN distribution class in the RAVEN input spec, then register that new class
+  # with the templates.snippets.distributions module so they can be imported as expected.
+  dist_class = distributions.distribution_class_from_spec(sub)
+  setattr(distributions, dist_class.tag, dist_class)
 
 
 factory = SnippetFactory()

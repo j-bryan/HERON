@@ -2,7 +2,50 @@ from typing import Any
 import inspect
 import xml.etree.ElementTree as ET
 
-from ..xml_utils import _to_string
+from ..xml_utils import find_node
+
+
+def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, default=None):
+  """
+  Creates a class property that gets/sets a child node text value
+  @ In, cls, ET.Element, the ET.Element class or a subclass of it
+  @ In, prop_name, str, property name
+  @ In, node_tag, str | None, optional, tag or path of the node the property is tied to (default=prop_name)
+  @ In, default, Any, optional, the default getter value
+  @ Out, None
+  """
+  if node_tag is None:
+    node_tag = prop_name
+
+  def getter(self):
+    node = self.find(node_tag)
+    return default if node is None else node.text
+
+  def setter(self, val):
+    find_node(self, node_tag).text = val
+
+  setattr(cls, prop_name, property(getter, setter))
+
+
+def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, default=None):
+  """
+  Creates a class property that gets/sets a node attribute value
+  @ In, cls, ET.Element, the ET.Element class or a subclass of it
+  @ In, prop_name, str, property name
+  @ In, attrib_name, str | None, optional, name of the node attribute the property is tied to (default=prop_name)
+  @ In, default, Any, optional, the default getter value
+  @ Out, None
+  """
+  if attrib_name is None:
+    attrib_name = prop_name
+
+  def getter(self):
+    return self.get(prop_name, default)
+
+  def setter(self, val):
+    self.set(prop_name, val)
+
+  setattr(cls, prop_name, property(getter, setter))
 
 
 class RavenSnippet(ET.Element):
@@ -13,6 +56,16 @@ class RavenSnippet(ET.Element):
   tag = None  # XML tag associated with the snippet class
   snippet_class = None  # class of Entity described by the snippet (e.g. Models, Optimizers, Samplers, DataObjects, etc.)
   subtype = None  # subtype of the snippet entity, does not need to be defined for all snippets
+
+  @classmethod
+  def _create_accessors(cls):
+    """
+    A shorthand for creating class properties to get and set node attributes and subnode text
+    @ In, None
+    @ Out, None
+    """
+    attrib_property(cls, "name")
+    attrib_property(cls, "subtype", "subType")
 
   def __init__(self,
                name: str | None = None,
@@ -25,6 +78,7 @@ class RavenSnippet(ET.Element):
     @ Out, None
     """
     super().__init__(self.tag)
+    self._create_accessors()
 
     # Update node attributes with provided values
     # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and provide
@@ -54,8 +108,8 @@ class RavenSnippet(ET.Element):
     @ Out, snippet, RavenSnippet, the new snippet
     """
     # Default implementation is to copy everything from the existing node into a new RavenSnippet object.
-    # Note that the snippet_class attribute does not show up in the XML, so subclasses relying on this
-    # default implementation will not have that attribute set.
+    # Looking at the class __init__ method signature can help us get the arguments right, such as getting the "name" attribute
+    # from the XML node and passing that to the class constructor.
     init_signature = inspect.signature(cls.__init__)
     init_params = {k: node.get(k, v.default) for k, v in init_signature.parameters.items()}  # first argument is "self"; skip it
     init_params.pop("self")
@@ -66,10 +120,10 @@ class RavenSnippet(ET.Element):
       snippet.append(child)
     return snippet
 
-  # Attribute accessors
-  @property
-  def name(self) -> str:
-    return self.attrib.get("name", "")
+  # # Attribute accessors
+  # @property
+  # def name(self) -> str:
+  #   return self.attrib.get("name", "")
 
   # Subtree building utilities
   def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:
@@ -112,7 +166,7 @@ class RavenSnippet(ET.Element):
         for tag, value in value.items():
           self._add_subelement(child, tag, value)
       else:
-        child.text = _to_string(value)
+        child.text = value
 
   # Other utility functions
   def to_assembler_node(self, tag: str) -> ET.Element:

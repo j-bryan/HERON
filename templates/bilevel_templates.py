@@ -5,16 +5,14 @@ import itertools
 
 from .raven_template import RavenTemplate
 from .snippets.factory import factory as snippet_factory
-from .snippets.files import File
 from .snippets.variablegroups import VariableGroup
 from .snippets.databases import NetCDF
 from .snippets.dataobjects import DataSet, PointSet
-from .snippets.models import Model, RavenCode, EconomicRatioPostProcessor, EnsembleModel, ExternalModel
+from .snippets.models import RavenCode, EconomicRatioPostProcessor
 from .snippets.outstreams import PrintOutStream
-from .snippets.samplers import MonteCarlo, SamplerVariable
+from .snippets.samplers import SamplerVariable
 
 from .utils import get_capacity_vars, get_component_activity_vars
-from .xml_utils import find_node, get_node_index
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 import HERON.src._utils as hutils
@@ -35,7 +33,7 @@ class BilevelTemplate(RavenTemplate):
     self.inner.loadTemplate()
     self.outer.loadTemplate()
 
-  def createWorkflow(self, case, components, sources) -> None:
+  def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
     self.inner.createWorkflow(case, components, sources)
     self.outer.createWorkflow(case, components, sources)
 
@@ -44,7 +42,7 @@ class BilevelTemplate(RavenTemplate):
     disp_results_name = self.inner.get_dispatch_results_name()
     self.outer.set_inner_data_name(disp_results_name, case.data_handling["inner_to_outer"])
 
-  def writeWorkflow(self, destination, case, components, sources) -> None:
+  def writeWorkflow(self, destination: str, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
     self.outer.writeWorkflow(destination, case, components, sources)
     self.inner.writeWorkflow(destination, case, components, sources)
 
@@ -57,10 +55,10 @@ class BilevelTemplate(RavenTemplate):
     print(msg_format.format(*os.path.split(conv_file)))
 
 class OuterTemplate(RavenTemplate):
-  template_path = "xml/bilevel_outer.xml"
+  template_path = "outer.xml"
   write_name = "outer.xml"
 
-  def createWorkflow(self, case, components, sources) -> None:
+  def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
     super().createWorkflow(case, components, sources)
 
     # Create slave RAVEN model. This gets loaded from the template, since all bilevel workflows use this.
@@ -114,7 +112,7 @@ class OuterTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
 
-  def _raven_model(self, case, components) -> RavenCode:
+  def _raven_model(self, case: Case, components: list[Component]) -> RavenCode:
     """
     Configures the inner RAVEN code. The bilevel outer template MUST have a <Code subType="RAVEN"> node defined.
     """
@@ -136,7 +134,7 @@ class OuterTemplate(RavenTemplate):
 
 class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
-  template_path = "xml/bilevel_inner.xml"
+  template_path = "inner.xml"
   write_name = "inner.xml"
 
   def __init__(self):
@@ -144,7 +142,7 @@ class InnerTemplate(RavenTemplate):
     self._dispatch_results_name = ""  # str, keeps track of the name of the Database or OutStream used pass dispatch
                                       #      data to the outer workflow
 
-  def createWorkflow(self, case, components, sources) ->  None:
+  def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) ->  None:
     super().createWorkflow(case, components, sources)
 
     # Add ARMA ROMs to ensemble model
@@ -216,10 +214,10 @@ class InnerTemplate(RavenTemplate):
     # back up, which would be sensitive to metric and variable naming conventions. We duplicate a little of the logic but
     # get something more robust in return.
     default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    stats_names = set(default_names) | set(case.get_result_statistics())
+    stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
     self._add_stats_to_postprocessor(econ_pp, stats_names, econ_vars, case.stats_metrics_meta)
     # Activity metrics with non-financial statistics
-    non_fin_stat_names = stats_names - set(self.FINANCIAL_STATS_NAMES)
+    non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
     self._add_stats_to_postprocessor(econ_pp, non_fin_stat_names, activity_vars, case.stats_metrics_meta)
 
     # Work out how the inner results should be routed back to the outer
@@ -346,7 +344,7 @@ class InnerTemplate(RavenTemplate):
     cf_attrs = ["_driver", "_alpha", "_reference", "_scale"]
 
     vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_econ_UQ']")
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc']")
+    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
 
     # looping through components to find uncertain cashflow attributes
     for component in components:
@@ -366,7 +364,9 @@ class InnerTemplate(RavenTemplate):
 
         dist_node = vp._vp.get_distribution() #ugh, this is NOT the XML... will have to reconstruct.
         dist_node.set("name", dist_name)
+        print(f"{dist_node=}")
         dist_snippet = snippet_factory.from_xml(dist_node)
+        print(f"{dist_snippet=}")
         self._add_snippet(dist_snippet)  # added to Distributions
 
         # Add uncertain parameter to econ UQ variable group
@@ -378,7 +378,7 @@ class InnerTemplate(RavenTemplate):
         mc.add_variable(sampler_var)
 
   @staticmethod
-  def _add_stats_to_postprocessor(pp, names, vars, meta) -> None:
+  def _add_stats_to_postprocessor(pp: EconomicRatioPostProcessor, names: list[str], vars: list[str], meta: dict[str, dict]) -> None:
     # for stat_name, var_name in itertools.product(names, vars):
     for var_name, stat_name in itertools.product(vars, names):
       stat_meta = meta[stat_name]

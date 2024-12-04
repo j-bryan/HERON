@@ -10,21 +10,20 @@ import sys
 import os
 import itertools
 import dill as pk
-import numpy as np
 import xml.etree.ElementTree as ET
 
+from .snippets.factory import factory as snippet_factory
 from .snippets.base import RavenSnippet
-from .snippets.runinfo import RunInfo, Sequence
+from .snippets.runinfo import RunInfo
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
 from .snippets.samplers import Sampler, SamplerVariable, Grid, Stratified, MonteCarlo, CustomSampler
 from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
 from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM
-from .snippets.distributions import Distribution, UniformDistribution
+from .snippets.distributions import Distribution, Uniform
 from .snippets.outstreams import OutStream, PrintOutStream, OptPathPlot
 from .snippets.dataobjects import DataObject, PointSet, DataSet
 from .snippets.variablegroups import VariableGroup
 from .snippets.files import File
-from .snippets.factory import factory as snippet_factory
 
 from .utils import get_capacity_vars, get_component_activity_vars
 from .xml_utils import add_node_to_tree, find_node, stringify_node_values
@@ -62,7 +61,7 @@ def parse_to_snippets(node: ET.Element) -> ET.Element:
   # If the node doesn't match a registered RavenSnippet class, copy over the node to the
   parsed = ET.Element(node.tag, node.attrib)
   parsed.text = node.text
-  parsed.tail = node.tail
+  # parsed.tail = node.tail
 
   # Recurse over node children (if any)
   for child in node:
@@ -163,6 +162,10 @@ class RavenTemplate(Template):
     @ In, snippet, RavenSnippet, the XML snippet to add
     @ In, parent, str | ET.Element | None, the parent node to add the snippet
     """
+    if not isinstance(snippet, RavenSnippet):
+      print("bad snippet:", snippet, type(snippet), snippet.tag)
+      raise ValueError
+
     # If a parent node was provided, just append the snippet to its parent node.
     if isinstance(parent, ET.Element):
       parent.append(snippet)
@@ -414,13 +417,15 @@ class RavenTemplate(Template):
     """
     # Add statistics for economic metrics to variable group. Use all statistics.
     default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    stats_names = set(default_names) | set(case.get_result_statistics())
+    # This gets the unique values from default_names and the case result statistics dict keys. Set operations
+    # look cleaner but result in a randomly ordered list. Having a consistent ordering of statistics is beneficial
+    # from a UX standpoint.
+    stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
     econ_metrics = case.get_econ_metrics(nametype="output")
     stats_var_names = self._get_result_statistic_names(econ_metrics, stats_names, case)
 
     # Add total activity statistics for variable group. Use only non-financial statistics.
-    non_fin_stat_names = stats_names - set(self.FINANCIAL_STATS_NAMES)
-    # tot_activity_metrics = self._get_activity_metrics(components)
+    non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
     tot_activity_metrics = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
     activity_var_names = self._get_result_statistic_names(tot_activity_metrics, non_fin_stat_names, case)
 
@@ -437,7 +442,7 @@ class RavenTemplate(Template):
     act_metrics = []
     for component in components:
       for tracker in component.get_tracking_vars():
-        resource_list = np.sort(list(component.get_resources()))
+        resource_list = sorted(list(component.get_resources()))
         for resource in resource_list:
           # NOTE: Assumes the only activity metric we care about is total activity
           default_stats_tot_activity = self.namingTemplates["tot_activity"].format(component=component.name, tracker=tracker, resource=resource)
@@ -449,7 +454,9 @@ class RavenTemplate(Template):
 
     # Create distribution
     dist_name = self.namingTemplates["distribution"].format(unit=comp_name, feature=feature)
-    dist = UniformDistribution(dist_name, lower_bound=min(capacities), upper_bound=max(capacities))
+    dist = Uniform(dist_name)
+    dist.lower_bound = min(capacities)
+    dist.upper_bound = max(capacities)
 
     # Create sampler variable
     # FIXME: This could be made more flexible to accommodate all RAVEN samplers. However, only a subset of
@@ -492,7 +499,7 @@ class RavenTemplate(Template):
       @ Out, names, list, list of names of statistics requested for output
     """
     stat_prefixes = self._get_stat_prefixes(stats, case)
-    stat_names = [f"{prefix}_{name}" for name, prefix in itertools.product(names, stat_prefixes)]
+    stat_names = [f"{prefix}_{name}" for prefix, name in itertools.product(stat_prefixes, names)]
     return stat_names
 
   @staticmethod
@@ -540,7 +547,9 @@ class RavenTemplate(Template):
     # create distribution snippet for the variable
     lower_bound = min(capacities)
     upper_bound = max(capacities)
-    dist = UniformDistribution(dist_name, lower_bound, upper_bound)
+    dist = Uniform(dist_name)
+    dist.lower_bound = lower_bound
+    dist.upper_bound = upper_bound
 
     # create variable for sampler, linked to the distribution
     sampler_var = SamplerVariable(var_name)
@@ -548,19 +557,19 @@ class RavenTemplate(Template):
 
     return dist, sampler_var
 
-    # Set how the sampler will sample the variable. This is determined by the mode and sampler type.
-    if sampler_type == "grid":  # just a grid sampler
-      caps = " ".join([str(x) for x in sorted(capacities)])
-      sampler_var.set_sampling_strategy(construction="custom", type="value", values=caps)
-    elif sampler_type == "opt":  # any optimization mode
-      # initial value
-      delta = upper_bound - lower_bound
-      # start at 5% away from 0
-      if upper_bound > 0:
-        initial = lower_bound + 0.05 * delta
-      else:
-        initial = upper_bound - 0.05 * delta
-      sampler_var.set_initial(initial)
+    # # Set how the sampler will sample the variable. This is determined by the mode and sampler type.
+    # if sampler_type == "grid":  # just a grid sampler
+    #   caps = " ".join([str(x) for x in sorted(capacities)])
+    #   sampler_var.set_sampling_strategy(construction="custom", type="value", values=caps)
+    # elif sampler_type == "opt":  # any optimization mode
+    #   # initial value
+    #   delta = upper_bound - lower_bound
+    #   # start at 5% away from 0
+    #   if upper_bound > 0:
+    #     initial = lower_bound + 0.05 * delta
+    #   else:
+    #     initial = upper_bound - 0.05 * delta
+    #   sampler_var.set_initial(initial)
 
   # Samplers
   def _add_sampler_variables(self, sampler: Sampler, case, components, sources):

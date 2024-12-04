@@ -17,14 +17,8 @@ class File(RavenSnippet):
 
   @type.setter
   def type(self, val: str) -> None:
-    self.set("type", val)
-
-  @classmethod
-  def from_xml(cls, node: ET.Element) -> "File":
-    name = node.get("name")
-    file = cls(name)
-    file.type = node.get("type", None)
-    return file
+    if val is not None:
+      self.set("type", val)
 
   def to_assembler_node(self, tag: str) -> ET.Element:
     node = ET.Element(tag)

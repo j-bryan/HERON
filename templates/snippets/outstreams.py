@@ -9,29 +9,26 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..xml_utils import _to_string
 from .base import RavenSnippet
 from .dataobjects import DataObject
 
 
 class OutStream(RavenSnippet):
-  snippet_class = "OutSteams"
+  snippet_class = "OutStreams"
 
   def __init__(self, name: str):
     super().__init__(name)
     ET.SubElement(self, "source")
 
   def set_source(self, source: DataObject) -> None:
-    source = self.find("source")
-    source.text = _to_string(source)
+    self.find("source").text = source
 
 class PrintOutStream(OutStream):
   tag = "Print"
 
   def __init__(self, name: str) -> None:
     super().__init__(name)
-    type_node = ET.SubElement(self, "type")
-    type_node.text = "csv"
+    ET.SubElement(self, "type").text = "csv"
 
   def add_parameter(self, name: str, value: Any) -> None:
     node = ET.SubElement(self, name)
@@ -46,7 +43,7 @@ class OptPathPlot(OutStream):
     ET.SubElement(self, "vars")
 
   def set_vars(self, vars: str | list[str]):
-    self.find("vars").text = _to_string(vars)
+    self.find("vars").text = vars
 
 class HeronDispatchPlot(OutStream):
   tag = "Plot"

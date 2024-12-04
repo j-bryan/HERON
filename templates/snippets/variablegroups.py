@@ -22,12 +22,17 @@ class VariableGroup(RavenSnippet):
     return vargroup
 
   def add_variables(self, *vars: str) -> None:
-    if len(self._variables) == 0:
-      self._variables = sorted(vars)
-    else:
-      # Insert the new variable names into the alphabetically sorted list
-      for v in vars:
-        if v in self._variables:  # don't duplicate variables in group
-          continue
-        bisect.insort(self._variables, v)
+    self._variables.extend(vars)
     self.text = self._variables
+    # if len(self._variables) == 0:
+    #   self._variables = sorted(vars)
+    # else:
+    #   # Insert the new variable names into the alphabetically sorted list
+    #   for v in vars:
+    #     if v in self._variables:  # don't duplicate variables in group
+    #       continue
+    #     bisect.insort(self._variables, v)
+    # self.text = self._variables
+
+  # def sort_variables(self, key=None) -> None:
+  #   self._variables = sorted(self._variables, key=key)

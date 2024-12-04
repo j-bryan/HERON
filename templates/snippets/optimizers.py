@@ -7,8 +7,6 @@ Optimization features
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..xml_utils import _to_string
-
 from ..xml_utils import find_node
 from .base import RavenSnippet
 from .samplers import Sampler
@@ -27,8 +25,7 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
     ET.SubElement(self, "TargetEvaluation")
 
   def set_objective(self, objective: str):
-    obj_node = self.find("objective")
-    obj_node.text = _to_string(objective)
+    self.find("objective").text = objective
 
   def set_target_data_object(self, data_object: DataObject):
     # The TargetEvaluation node has an assembler node format with the TargetEvaluation tag. It's not really an
@@ -48,20 +45,16 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
     # convergence settings
     convergence = find_node(self, "convergence")
     for k, v in opt_settings.get("convergence", {}).items():
-      node = convergence.find(k)
-      node.text = _to_string(v)
+      find_node(convergence, k).text = v
 
     # persistence
     if "persistence" in opt_settings:
-      persistence = find_node(convergence, "persistence")
-      persistence.text = _to_string(opt_settings["persistence"])
+      find_node(convergence, "persistence").text = opt_settings["persistence"]
 
     # samplerInit settings
     sampler_init = find_node(self, "samplerInit")
-    for name in ["limit", "type"]:  # writeEvery not exposed in HERON input
-      if name in opt_settings:
-        node = find_node(sampler_init, name)
-        node.text = _to_string(opt_settings[name])
+    for name in opt_settings.keys() & {"limit", "type"}:  # writeEvery not exposed in HERON input
+      find_node(sampler_init, name).text = opt_settings[name]
 
 #########################
 # Bayesian Optimization #
@@ -118,25 +111,24 @@ class BayesianOptimizer(Optimizer):
     # random seed
     if "seed" in bo_settings:
       sampler_init = find_node(self, "samplerInit")
-      initial_seed = find_node(sampler_init, "initialSeed")
-      initial_seed.text = _to_string(bo_settings["seed"])
+      find_node(sampler_init, "initialSeed").text = bo_settings["seed"]
 
     # modelSelection
     model_selection = find_node(self, "ModelSelection")
     for k, v in bo_settings.get("ModelSelection", {}):
-      node = find_node(model_selection, k)
-      node.text = _to_string(v)
+      find_node(model_selection, k).text = v
 
   def set_sampler(self, sampler: Sampler) -> None:
-    if (sampler_node := self.find("Sampler")) is not None:
-      self.remove(sampler_node)
-    self.append(sampler.to_assembler_node("Sampler"))
+    sampler_node = find_node(self, "Sampler")
+    assemb_node = sampler.to_assembler_node("Sampler")
+    sampler_node.attrib = assemb_node.attrib
+    sampler_node.text = assemb_node.text
 
   def set_rom(self, rom: Model) -> None:
-    if (rom_node := self.find("ROM")) is not None:
-      self.remove(rom_node)
-    self.append(rom.to_assembler_node("ROM"))
-
+    model_node = find_node(self, "Model")
+    assemb_node = rom.to_assembler_node("Model")
+    model_node.attrib = assemb_node.attrib
+    model_node.text = assemb_node.text
 class ExpectedImprovement(RavenSnippet):
   tag = "ExpectedImprovement"
 
@@ -220,7 +212,5 @@ class GradientDescent(Optimizer):
     # stepSize settings
     step_size = find_node(self, "stepSize")
     grad_history = find_node(step_size, "GradientHistory")
-    for name in ["growthFactor", "shrinkFactor", "initStepScale"]:
-      if name in gd_settings:
-        node = find_node(grad_history, name)
-        node.text = _to_string(gd_settings[name])
+    for name in gd_settings.keys() & {"growthFactor", "shrinkFactor", "initStepScale"}:
+      find_node(grad_history, name).text = gd_settings[name]
