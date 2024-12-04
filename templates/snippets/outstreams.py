@@ -9,19 +9,21 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet
+from .base import RavenSnippet, node_property
 from .dataobjects import DataObject
 
 
 class OutStream(RavenSnippet):
   snippet_class = "OutStreams"
 
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "source")
+
   def __init__(self, name: str):
     super().__init__(name)
     ET.SubElement(self, "source")
-
-  def set_source(self, source: DataObject) -> None:
-    self.find("source").text = source
 
 class PrintOutStream(OutStream):
   tag = "Print"
@@ -38,29 +40,21 @@ class OptPathPlot(OutStream):
   tag = "Plot"
   subtype = "OptPath"
 
-  def __init__(self, name: str):
-    super().__init__(name)
-    ET.SubElement(self, "vars")
-
-  def set_vars(self, vars: str | list[str]):
-    self.find("vars").text = vars
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "variables", "vars")
 
 class HeronDispatchPlot(OutStream):
   tag = "Plot"
   subtype = "HERON.DispatchPlot"
 
-  def __init__(self, name: str):
-    super().__init__(name)
-    ET.SubElement(self, "macro_variable")
-    ET.SubElement(self, "micro_variable")
-    ET.SubElement(self, "signals")
-
-  def set_time_indices(self, macro: str, micro: str) -> None:
-    self.find("macro_variable").text = macro
-    self.find("micro_variable").text = micro
-
-  def set_signals(self, signals: str | list[str]) -> None:
-    self.find("signals").text = signals
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "macro_variable")
+    node_property(cls, "micro_variable")
+    node_property(cls, "signals")
 
 class TealCashFlowPlot(OutStream):
   """

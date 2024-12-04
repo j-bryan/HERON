@@ -10,7 +10,7 @@ from .snippets.databases import NetCDF
 from .snippets.dataobjects import DataSet, PointSet
 from .snippets.models import RavenCode, EconomicRatioPostProcessor
 from .snippets.outstreams import PrintOutStream
-from .snippets.samplers import SamplerVariable
+from .snippets.samplers import SampledVariable
 
 from .utils import get_capacity_vars, get_component_activity_vars
 
@@ -229,7 +229,7 @@ class InnerTemplate(RavenTemplate):
     data_handling = case.data_handling["inner_to_outer"]
     if data_handling == "csv":
       disp_results = PrintOutStream(self._dispatch_results_name)
-      disp_results.set_source(metrics_stats)
+      disp_results.source = metrics_stats
     else:  # default to NetCDF handling
       disp_results = NetCDF(self._dispatch_results_name)
     write_metrics_stats.add_output(disp_results)
@@ -373,8 +373,8 @@ class InnerTemplate(RavenTemplate):
         vg_econ_uq.add_variables(feat_name)
 
         # Add distribution to MonteCarlo sampler
-        sampler_var = SamplerVariable(feat_name)
-        sampler_var.set_distribution(dist_snippet)
+        sampler_var = SampledVariable(feat_name)
+        sampler_var.distribution = dist_snippet
         mc.add_variable(sampler_var)
 
   @staticmethod

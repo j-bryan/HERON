@@ -2,7 +2,7 @@ from typing import Any
 import inspect
 import xml.etree.ElementTree as ET
 
-from ..xml_utils import find_node
+from ..utils import find_node
 
 
 def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, default=None):
@@ -24,7 +24,12 @@ def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, 
   def setter(self, val):
     find_node(self, node_tag).text = val
 
-  setattr(cls, prop_name, property(getter, setter))
+  def deleter(self):
+    if (node := self.find(node_tag)) is not None:
+      self.remove(node)
+
+  doc = f"Accessor property for '{node_tag}' node text"
+  setattr(cls, prop_name, property(getter, setter, deleter, doc=doc))
 
 
 def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, default=None):
@@ -45,7 +50,11 @@ def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = N
   def setter(self, val):
     self.set(prop_name, val)
 
-  setattr(cls, prop_name, property(getter, setter))
+  def deleter(self):
+    self.attrib.pop(attrib_name, None)
+
+  doc = f"Accessor property for '{attrib_name}' node attribute"
+  setattr(cls, prop_name, property(getter, setter, deleter))
 
 
 class RavenSnippet(ET.Element):
@@ -119,11 +128,6 @@ class RavenSnippet(ET.Element):
     for child in node:
       snippet.append(child)
     return snippet
-
-  # # Attribute accessors
-  # @property
-  # def name(self) -> str:
-  #   return self.attrib.get("name", "")
 
   # Subtree building utilities
   def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:

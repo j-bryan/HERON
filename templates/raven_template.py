@@ -16,7 +16,7 @@ from .snippets.factory import factory as snippet_factory
 from .snippets.base import RavenSnippet
 from .snippets.runinfo import RunInfo
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
-from .snippets.samplers import Sampler, SamplerVariable, Grid, Stratified, MonteCarlo, CustomSampler
+from .snippets.samplers import Sampler, SampledVariable, Grid, Stratified, MonteCarlo, CustomSampler
 from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
 from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM
 from .snippets.distributions import Distribution, Uniform
@@ -25,8 +25,7 @@ from .snippets.dataobjects import DataObject, PointSet, DataSet
 from .snippets.variablegroups import VariableGroup
 from .snippets.files import File
 
-from .utils import get_capacity_vars, get_component_activity_vars
-from .xml_utils import add_node_to_tree, find_node, stringify_node_values
+from .utils import get_component_activity_vars, add_node_to_tree, find_node, stringify_node_values
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -218,7 +217,7 @@ class RavenTemplate(Template):
 
     # Print the results of the optimization
     print_results = PrintOutStream("sweep")
-    print_results.set_source(results_data)
+    print_results.source = results_data
     self._add_snippet(print_results)
 
     # Create a MultiRun step to run the sweep
@@ -272,14 +271,14 @@ class RavenTemplate(Template):
 
     # Set optimizer objective function
     objective = self._get_opt_metric_out_name(case)
-    optimizer.set_objective(objective)
+    optimizer.objective = objective
 
     # Add case labels to the optimizer
     self._add_labels(optimizer, case)
 
     # Print the results of the optimization
     print_results = PrintOutStream("opt_soln")
-    print_results.set_source(solution_export)
+    print_results.source = solution_export
     print_results.add_subelements(clusterLabel="trajID")
     self._add_snippet(print_results)
 
@@ -296,9 +295,9 @@ class RavenTemplate(Template):
 
     # Plot the result of the optimization
     opt_path_plot = OptPathPlot("opt_path")
-    opt_path_plot.set_source(solution_export)
+    opt_path_plot.source = solution_export
     # opt_metric, _ = case.get_opt_metric()  # optimization metric name
-    opt_path_plot.set_vars(["GRO_capacities", objective])
+    opt_path_plot.variables = ["GRO_capacities", objective]
     self._add_snippet(opt_path_plot)
 
     plot_step = IOStep(f"plot_{opt_path_plot.name}")
@@ -373,7 +372,7 @@ class RavenTemplate(Template):
 
     # Create the outstream for the dataset
     outstream = PrintOutStream(dataset_name)
-    outstream.set_source(dataset)
+    outstream.source = dataset
     self._add_snippet(outstream)
 
     # create step
@@ -462,9 +461,9 @@ class RavenTemplate(Template):
     # FIXME: This could be made more flexible to accommodate all RAVEN samplers. However, only a subset of
     #        RAVEN samplers are used at the moment (Grid, Stratified, MonteCarlo, Custom), so only these are
     #        supported here.
-    sampler_var = SamplerVariable(var_name)
+    sampler_var = SampledVariable(var_name)
     if isinstance(sampler, (Grid, Stratified, MonteCarlo)):
-      sampler_var.set_distribution(dist)
+      sampler_var.distribution = dist
     if isinstance(sampler, (Grid, Stratified)):
       # TODO: where do these parameters come from?
       sampler_var.set_sampling_strategy(construction="equal", type="CDF", steps=4, values=[0, 1])
@@ -540,7 +539,7 @@ class RavenTemplate(Template):
     return rom
 
   # Distributions
-  def _create_uniform_variable(self, comp_name, var_name, capacities, sampler_type) -> tuple[Distribution, SamplerVariable]:
+  def _create_uniform_variable(self, comp_name, var_name, capacities, sampler_type) -> tuple[Distribution, SampledVariable]:
     feature = "capacity" if "capacity" in var_name else "dispatch"
     dist_name = self.namingTemplates["distribution"].format(unit=comp_name, feature=feature)
 
@@ -552,8 +551,8 @@ class RavenTemplate(Template):
     dist.upper_bound = upper_bound
 
     # create variable for sampler, linked to the distribution
-    sampler_var = SamplerVariable(var_name)
-    sampler_var.set_distribution(dist)
+    sampler_var = SampledVariable(var_name)
+    sampler_var.distribution = dist
 
     return dist, sampler_var
 
@@ -569,7 +568,7 @@ class RavenTemplate(Template):
     #     initial = lower_bound + 0.05 * delta
     #   else:
     #     initial = upper_bound - 0.05 * delta
-    #   sampler_var.set_initial(initial)
+    #   sampler_var.initial = initial
 
   # Samplers
   def _add_sampler_variables(self, sampler: Sampler, case, components, sources):
@@ -639,7 +638,7 @@ class RavenTemplate(Template):
     optimizer.set_opt_settings(opt_settings)
     # Set GPR kernel if provided
     if custom_kernel := opt_settings["algorithm"]["BayesianOpt"].get("kernel", None):
-      model.set_kernel(custom_kernel)
+      model.kernel = custom_kernel
 
     # Create sampler variables and their respective distributions
     self._add_sampler_variables(sampler, case, components, sources)  # TODO
@@ -664,7 +663,7 @@ class RavenTemplate(Template):
     opt_settings = case.get_optimization_settings()
     optimizer.set_opt_settings(opt_settings)
     objective, _ = case.get_opt_metric()
-    optimizer.set_objective(objective)
+    optimizer.objective = objective
 
     return optimizer
 

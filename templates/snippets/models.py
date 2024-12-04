@@ -4,7 +4,7 @@ import sys
 import shutil
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet
+from .base import RavenSnippet, node_property, attrib_property
 from .dataobjects import DataObject
 from .databases import Database
 
@@ -30,6 +30,11 @@ class RavenCode(Model):
   tag = "Code"
   subtype = "RAVEN"
 
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "executable")
+
   def __init__(self, name: str):
     super().__init__(name)
     self._set_executable()
@@ -42,11 +47,7 @@ class RavenCode(Model):
       executable = "raven_framework"
     else:
       raise RuntimeError(f"raven_framework not in PATH and not at {exec_path}")
-
-    exec_node = self.find("executable")
-    if exec_node is None:
-      exec_node = ET.SubElement(self, "executable")
-    exec_node.text = executable
+    self.executable = executable
 
   def set_py_cmd(self, cmd: str) -> None:
     """
@@ -85,17 +86,16 @@ class RavenCode(Model):
       keep_node = ET.SubElement(self, keep_tag)
     keep_node.text = dest
 
-    # # data handling: inner to outer data format
-    # output_tags = {"netcdf": "outputDatabase",
-    #                "csv": "outputExportOutStreams"}
-    # output_target = "disp_results"  # TODO: expose to set from outside this class
-    # data_handling = case.data_handling["inner_to_outer"]
-    # output_node = ET.SubElement(raven, output_tags.get(data_handling))
-    # output_node.text = output_target
-
 class GaussianProcessRegressor(Model):
   tag = "ROM"
   subtype = "GaussianProcessRegressor"
+
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "features", "Features")
+    node_property(cls, "target", "Target")
+    node_property(cls, "kernel", "custom_kernel")
 
   default_settings = {
     "Features": "",  # needs case & component info to populate
@@ -116,16 +116,7 @@ class GaussianProcessRegressor(Model):
 
   def add_feature(self, feature: str):
     self._features.append(feature)
-    features_node = self.find("Features")
-    features_node.text = self._features
-
-  def set_target(self, target: str):
-    target_node = self.find("Target")
-    target_node.text = target
-
-  def set_kernel(self, kernel: str):
-    kernel_node = self.find("custom_kernel")
-    kernel_node.text = kernel
+    self.features = self._features
 
 class EnsembleModel(Model):
   tag = "EnsembleModel"
@@ -136,16 +127,14 @@ class EconomicRatioPostProcessor(Model):
   subtype = "EconomicRatio"
 
   def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
-    node = ET.SubElement(self, tag, prefix=prefix, **kwargs)
-    node.text = variable
+    ET.SubElement(self, tag, prefix=prefix, **kwargs).text = variable
 
 class ExternalModel(Model):
   tag = "ExternalModel"
   subtype = ""
 
-  def __init__(self, name: str, subtype: str = "") -> None:
+  def __init__(self, name: str) -> None:
     super().__init__(name)
-    self.subtype = subtype
     self._variables = []  # list[str]
 
   def add_variable(self, *vars: str) -> None:

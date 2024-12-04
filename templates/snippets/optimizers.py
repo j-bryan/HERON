@@ -7,8 +7,8 @@ Optimization features
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..xml_utils import find_node
-from .base import RavenSnippet
+from ..utils import find_node
+from .base import RavenSnippet, node_property
 from .samplers import Sampler
 from .models import Model
 from .dataobjects import DataObject
@@ -18,14 +18,16 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
   """ A base class for RAVEN optimizer XML snippets """
   snippet_class = "Optimizers"
 
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "objective")
+
   def __init__(self, name: str):
     super().__init__(name)
     # "objective" and "TargetEvaluation" subnodes are required for all optimizers implemented here
     ET.SubElement(self, "objective")
     ET.SubElement(self, "TargetEvaluation")
-
-  def set_objective(self, objective: str):
-    self.find("objective").text = objective
 
   def set_target_data_object(self, data_object: DataObject):
     # The TargetEvaluation node has an assembler node format with the TargetEvaluation tag. It's not really an

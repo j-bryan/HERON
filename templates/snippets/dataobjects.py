@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from .base import RavenSnippet
 from .variablegroups import VariableGroup
 
-from ..xml_utils import find_node
+from ..utils import find_node
 
 
 class DataObject(RavenSnippet):

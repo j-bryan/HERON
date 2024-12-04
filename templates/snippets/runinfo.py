@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet, node_property
 from .steps import Step
-from ..xml_utils import find_node
+from ..utils import find_node
 
 
 class Sequence(RavenSnippet):
@@ -86,50 +86,3 @@ class RunInfo(RavenSnippet):
       sequence = Sequence()
       self.append(sequence)
     sequence.add_step(step)
-
-  # Attribute accessors
-  # @property
-  # def job_name(self) -> str:
-  #   node = self.find("JobName")
-  #   return False if node is None else node.text
-
-  # @job_name.setter
-  # def job_name(self, val: str) -> None:
-  #   find_node(self, "JobName").text = val
-
-  # @property
-  # def working_dir(self) -> str:
-  #   node = self.find("WorkingDir")
-  #   return False if node is None else node.text
-
-  # @working_dir.setter
-  # def working_dir(self, val: str) -> None:
-  #   find_node(self, "WorkingDir").text = val
-
-  # @property
-  # def batch_size(self) -> str:
-  #   node = self.find("batchSize")
-  #   return False if node is None else node.text
-
-  # @batch_size.setter
-  # def batch_size(self, val: int) -> None:
-  #   find_node(self, "batchSize").text = val
-
-  # @property
-  # def internal_parallel(self) -> bool:
-  #   node = self.find("internalParallel")
-  #   return False if node is None else node.text
-
-  # @internal_parallel.setter
-  # def internal_parallel(self, val: bool) -> None:
-  #   node = find_node(self, "internalParallel")
-  #   node.text = val
-
-  # @property
-  # def num_mpi(self) -> int:
-  #   node = self.find("NumMPI")
-  #   return False if node is None else node.text
-
-  # @num_mpi.setter
-  # def num_mpi(self, val: int) -> None:
-  #   find_node(self, "NumMPI").text = val

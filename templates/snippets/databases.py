@@ -1,10 +1,17 @@
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet
+from .base import RavenSnippet, node_property, attrib_property
 
 
 class Database(RavenSnippet):
   snippet_class = "Databases"
+
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    attrib_property(cls, "read_mode")
+    attrib_property(cls, "directory")
+    attrib_property(cls, "filename")
 
   def __init__(self,
                name: str,
@@ -34,34 +41,6 @@ class Database(RavenSnippet):
   #####################
   # Getters & Setters #
   #####################
-  @property
-  def read_mode(self) -> str:
-    return self.attrib.get("read_mode")
-
-  @read_mode.setter
-  def read_mode(self, read_mode) -> None:
-    allowed_values = ["read", "overwrite"]
-    if read_mode.lower() not in allowed_values:
-      raise ValueError(f"Database read_mode must be one of {allowed_values}. Received '{read_mode.lower()}'.")
-    self.attrib["readMode"] = read_mode.lower()
-
-  @property
-  def directory(self) -> str:
-    return self.attrib.get("directory")
-
-  @directory.setter
-  def directory(self, directory: str) -> None:
-    # TODO: check if directory exists?
-    self.attrib["directory"] = directory
-
-  @property
-  def filename(self) -> str:
-    return self.attrib.get("filename", f"{self.name}.{'h5' if self.get_type() == 'HDF5' else 'nc'}")
-
-  @filename.setter
-  def filename(self, filename: str) -> None:
-    self.attrib["filename"] = filename
-
   def add_variable(self, *vars: str):
     for v in vars:
       self.variables.add(v)
@@ -74,13 +53,7 @@ class NetCDF(Database):
 class HDF5(Database):
   tag = "HDF5"
 
-  @property
-  def compression(self) -> str | None:
-    return self.attrib.get("compression", None)
-
-  @compression.setter
-  def compression(self, compression: str) -> None:
-    allowed_values = ["gzip", "lzf"]
-    if compression.lower() not in allowed_values:
-      raise ValueError(f"Database compression must be one of {allowed_values}. Received '{compression.lower()}'.")
-    self.attrib["compression"] = compression.lower()
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    attrib_property(cls, "compression")
