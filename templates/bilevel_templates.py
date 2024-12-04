@@ -144,30 +144,6 @@ class InnerTemplate(RavenTemplate):
     self._dispatch_results_name = ""  # str, keeps track of the name of the Database or OutStream used pass dispatch
                                       #      data to the outer workflow
 
-  # def createWorkflow(self, case, components, sources) ->  None:
-  #   super().createWorkflow(case, components, sources)
-  #   # FIXME Assume synthetic histories for now but could be multiple static histories
-
-  #   # Collect relevant variables before we start adding names/parameters/nodes to various parts of the XML
-  #   cap_vars = get_capacity_vars(components, self.namingTemplate["variable"])  # dict[str, valued param]
-  #   disp_vars = get_dispatch_vars(components, self.namingTemplates["dispatch"])  # list[str]
-
-  #   # Fill out variable names for final_return variable group
-  #   results_vargroup = self._template.find("GRO_final_return")
-  #   results_vars = self._get_statistical_results_vars(case, components)
-  #   results_vargroup.add_variables(*results_vars)
-
-  #   # For all ARMA sources, create a model node for the accompanying pickled ROM, add that ROM to the ensemble model,
-  #   # and create steps to load the model and write its metadata.
-  #   self._add_time_series_roms(case, sources)
-
-  #   # For
-  #   self._modify_components(case, components)
-  #   self._modify_case_labels(case.get_labels())
-  #   self._modify_time_vars(case.get_time_name(), case.get_year_name())
-  #   self._modify_econ_metrics(case, components)
-  #   self._modify_result_statistics(case, components)
-
   def createWorkflow(self, case, components, sources) ->  None:
     super().createWorkflow(case, components, sources)
 
@@ -366,74 +342,6 @@ class InnerTemplate(RavenTemplate):
         vg_dispatch.add_variables(self.namingTemplates["cluster_index"])
         dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
 
-  def _modify_components(self, case: Case, components: list[Component]):
-    """
-    Modify variable groups and the Monte Carlo sampler to include capacity and dispatch variables
-    """
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
-    vg_capacities = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
-    vg_init_disp = self._template.find("VariableGroups/Group[@name='GRO_init_disp']")
-    vg_full_disp = self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']")
-
-    # change inner input due to components requested
-    for component in components:
-      name = component.name
-      # treat capacity
-      ## we just need to make sure everything we need gets into the dispatch ensemble model.
-      ## For each interaction of each component, that means making sure the Function, ARMA, or constant makes it.
-      ## Constants from outer (namely sweep/opt capacities) are set in the MC Sampler from the outer
-      ## The Dispatch needs info from the Outer to know which capacity to use, so we can't pass it from here.
-      capacity = component.get_capacity(None, raw=True)
-
-      if capacity.is_parametric():
-        # this capacity is being [swept or optimized in outer] (list) or is constant (float)
-        # -> so add a node, put either the const value or a dummy in place
-        cap_name = self.namingTemplates['variable'].format(unit=name, feature='capacity')
-        values = capacity.get_value(debug=case.debug['enabled'])
-        if isinstance(values, list):
-          cap_val = 42 # placeholder
-        else:
-          cap_val = values
-        mc.add_constant(cap_name, cap_val)
-        # add component to applicable variable groups
-        vg_capacities.add_variables(cap_name)
-      elif capacity.type in ['StaticHistory', 'SyntheticHistory', 'Function', 'Variable']:
-        # capacity is limited by a signal, so it has to be handled in the dispatch; don't include it here.
-        # OR capacity is limited by a function, and we also can't handle it here, but in the dispatch.
-        pass
-      else:
-        raise NotImplementedError(f'Capacity from "{capacity}" not implemented yet. Component: {cap_name}')
-
-      for tracker in component.get_tracking_vars():
-        resource_list = sorted(list(component.get_resources()))
-        for resource in resource_list:
-          var_name = self.namingTemplates['dispatch'].format(component=name, tracker=tracker, resource=resource)
-          vg_init_disp.add_variables(var_name)
-          vg_full_disp.add_variables(var_name)
-
-  def _modify_econ_metrics(self, case: Case, components: list[Component]) -> None:
-    """
-      Modifies template to include economic metrics
-      @ In, case, HERON Case, defining Case instance
-      @ In, components, list[Component], case components
-      @ Out, None
-    """
-    # get all economic metrics intended for use in TEAL and reported back
-    econ_metrics = case.get_econ_metrics(nametype='output')
-    tot_act_vars = self._get_activity_metrics(components)
-
-    # find variable groups to update with economic metrics
-    dispatch_out = self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']")
-    arma_samp_out = self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']")
-    # find point set output node to update with economic metrics
-    arma_metrics = self._template.find("DataObjects/PointSet[@name='arma_metrics']")
-
-    # update fields with econ metric names
-    metrics = econ_metrics + tot_act_vars
-    dispatch_out.add_variables(*metrics)
-    arma_samp_out.add_variables(*metrics)
-    arma_metrics.add_outputs(*metrics)
-
   def _add_uncertain_cashflow_params(self, components) -> None:
     cf_attrs = ["_driver", "_alpha", "_reference", "_scale"]
 
@@ -468,86 +376,6 @@ class InnerTemplate(RavenTemplate):
         sampler_var = SamplerVariable(feat_name)
         sampler_var.set_distribution(dist_snippet)
         mc.add_variable(sampler_var)
-
-  def _modify_inner_result_statistics(self, template, case, components):
-    """
-      Modifies template to include result statistics
-      @ In, template, xml.etree.ElementTree.Element, root of XML to modify
-      @ In, case, HERON Case, defining Case instance
-      @ Out, None
-    """
-    # final return variable group (sent to outer)
-    group_final_return = self._create_statistical_results_vargroup("GRO_final_return")
-
-    # fill out PostProcessor nodes
-    pp_node = template.find('Models').find(".//PostProcessor[@name='statistics']")
-    # add default statistics
-    result_statistics = case.get_result_statistics() # list of stats beyond default
-    tot_act_vars = []
-    for component in components:
-      for tracker in component.get_tracking_vars():
-        resource_list = np.sort(list(component.get_resources()))
-        for resource in resource_list:
-          tot_act_var = "TotalActivity"+ "__" +component.name + "__" + tracker + "__" + resource
-          tot_act_vars.append(tot_act_var)
-    for var in tot_act_vars:
-      for stat, pref in zip(DEFAULT_STATS_NAMES, default_stats_prefixes):
-        pp_node.append(xmlUtils.newNode(stat, text=var, attrib={'prefix': pref}))
-
-    for em in econ_metrics + tot_act_vars:
-      for stat, pref in zip(DEFAULT_STATS_NAMES, default_stats_prefixes):
-        pp_node.append(xmlUtils.newNode(stat, text=em, attrib={'prefix': pref}))
-      # add any user supplied statistics beyond defaults
-      if any(stat not in DEFAULT_STATS_NAMES + default_stats_tot_act for stat in result_statistics):
-        for raven_metric_name in result_statistics:
-          if raven_metric_name not in DEFAULT_STATS_NAMES:
-            prefix = self._get_stats_metrics_prefixes(case, [raven_metric_name], use_extra=False)[0]
-            # add subnode to PostProcessor
-            if raven_metric_name == 'percentile':
-              # add percent attribute
-              percent = result_statistics[raven_metric_name]
-              if isinstance(percent, list):
-                for p in percent:
-                  pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                                  attrib={'prefix': prefix,
-                                                          'percent': p}))
-              else:
-
-                pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                                attrib={'prefix': prefix,
-                                                        'percent': percent}))
-            elif raven_metric_name in ['valueAtRisk', 'expectedShortfall', 'sortinoRatio', 'gainLossRatio']:
-              threshold = result_statistics[raven_metric_name]
-              if isinstance(threshold, list):
-                for t in threshold:
-                  if not em.startswith("TotalActivity"):
-                    pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                                  attrib={'prefix': prefix,
-                                                          'threshold': t}))
-              else:
-                if not em.startswith("TotalActivity"):
-                  pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                                attrib={'prefix': prefix,
-                                                        'threshold': threshold}))
-            else:
-              if not em.startswith("TotalActivity"):
-                pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                              attrib={'prefix': prefix}))
-              if em.startswith("TotalActivity"):
-                if prefix not in FINANCIAL_PREFIXES:
-                  pp_node.append(xmlUtils.newNode(raven_metric_name, text=em,
-                                              attrib={'prefix': prefix}))
-
-      # if not specified, "sweep" mode has additional defaults
-      elif case.get_mode() == 'sweep':
-        sweep_stats_prefixes = self._get_stats_metrics_prefixes(case, SWEEP_DEFAULT_STATS_NAMES, use_extra=False)
-        for em in econ_metrics:
-          for stat, pref in zip(SWEEP_DEFAULT_STATS_NAMES, sweep_stats_prefixes):
-            pp_node.append(xmlUtils.newNode(stat, text=em, attrib={'prefix': pref}))
-        for var in tot_act_vars:
-          for stat, pref in zip(SWEEP_DEFAULT_STATS_NAMES, sweep_stats_prefixes):
-            pp_node.append(xmlUtils.newNode(stat, text=var, attrib={'prefix': pref}))
-    # if not specified, "opt" mode is handled in _modify_inner_optimization_settings
 
   @staticmethod
   def _add_stats_to_postprocessor(pp, names, vars, meta) -> None:
