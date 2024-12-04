@@ -5,9 +5,11 @@ from .base import RavenSnippet
 
 
 class Step(RavenSnippet):
-  def __init__(self, tag: str, name: str) -> None:
+  snippet_class = "Steps"
+
+  def __init__(self, name: str) -> None:
     # FIXME: step attribute options not exposed in HERON input
-    super().__init__(tag, name, "Steps")
+    super().__init__(name)
     self._allowed_subs = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
 
   def _add_item(self, tag: str, entity: RavenSnippet) -> None:
@@ -62,20 +64,26 @@ class Step(RavenSnippet):
 
 
 class IOStep(Step):
+  tag = "IOStep"
+
   def __init__(self, name: str) -> None:
-    super().__init__("IOStep", name)
+    super().__init__(name)
     self._allowed_subs = ["Input", "Output"]
 
 
 class MultiRun(Step):
+  tag = "MultiRun"
+
   def __init__(self, name: str) -> None:
-    super().__init__("MultiRun", name)
+    super().__init__(name)
 
 
 class PostProcess(Step):
+  tag = "PostProcess"
+
   def __init__(self, name: str) -> None:
-    super().__init__("PostProcess", name)
-    self._allowed_subs("Input", "Model", "Output")
+    super().__init__(name)
+    self._allowed_subs = ["Input", "Model", "Output"]
 
 
 # Unused RAVEN steps: SingleRun, RomTrainer

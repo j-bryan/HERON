@@ -8,7 +8,6 @@
 """
 import sys
 import os
-import shutil
 import itertools
 import dill as pk
 import numpy as np
@@ -17,16 +16,18 @@ import xml.etree.ElementTree as ET
 from .snippets.base import RavenSnippet
 from .snippets.runinfo import RunInfo, Sequence
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
-from .snippets.samplers import Sampler, SamplerVariable, GridSampler, StratifiedSampler, MonteCarloSampler, CustomSampler
-from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescentOptimizer
-from .snippets.models import Model, RavenCode, GaussianProcessRegressor
+from .snippets.samplers import Sampler, SamplerVariable, Grid, Stratified, MonteCarlo, CustomSampler
+from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
+from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM
 from .snippets.distributions import Distribution, UniformDistribution
 from .snippets.outstreams import OutStream, PrintOutStream, OptPathPlot
 from .snippets.dataobjects import DataObject, PointSet, DataSet
 from .snippets.variablegroups import VariableGroup
 from .snippets.files import File
+from .snippets.factory import factory as snippet_factory
 
-from .xml_utils import add_node_to_tree, find_node, stringify_node_values, get_node_index
+from .utils import get_capacity_vars, get_component_activity_vars
+from .xml_utils import add_node_to_tree, find_node, stringify_node_values
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -42,6 +43,33 @@ sys.path.append(os.path.join(RAVEN_LOC, '..'))
 from ravenframework.utils import xmlUtils
 from ravenframework.InputTemplates.TemplateBaseClass import Template
 sys.path.pop()
+
+
+
+def parse_to_snippets(node: ET.Element) -> ET.Element:
+  """
+  Builds an XML tree that looks exactly like node but with RavenSnippet objects where defined.
+  @ In, node, ET.Element, the node to parse
+  @ Out, parsed: ET.Element, the parsed XML node
+  """
+  # Base case: The node matches a registered RavenSnippet class. RavenSnippets know how to represent
+  # their entire contiguous block of XML, so no further recursion is necessary once a valid RavenSnippet
+  # is found.
+  if snippet_factory.is_registered(node):
+    snippet = snippet_factory.from_xml(node)
+    return snippet
+
+  # If the node doesn't match a registered RavenSnippet class, copy over the node to the
+  parsed = ET.Element(node.tag, node.attrib)
+  parsed.text = node.text
+  parsed.tail = node.tail
+
+  # Recurse over node children (if any)
+  for child in node:
+    parsed_child = parse_to_snippets(child)
+    parsed.append(parsed_child)
+
+  return parsed
 
 
 class RavenTemplate(Template):
@@ -63,6 +91,7 @@ class RavenTemplate(Template):
                              're_cash'        : '_rec_{period}_{driverType}{driverName}',
                              'cluster_index'  : '_ROM_Cluster',
                              'metric_name'    : '{stats}_{econ}',
+                             'statistic'      : '{prefix}_{name}'
                              })
 
   # Default stats abbreviations. Different run modes have different defaults
@@ -82,19 +111,15 @@ class RavenTemplate(Template):
   def loadTemplate(self) -> None:
     this_file_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(this_file_dir, self.template_path)
-    self._template, _ = xmlUtils.loadToTree(template_path)
+    raw_template, _ = xmlUtils.loadToTree(template_path)
+    # Parsing the XML tree into RavenSnippet classes gives us access to handy attributes and methods for manipulating
+    # the template XML.
+    self._template = parse_to_snippets(raw_template)
 
   def createWorkflow(self, case, components, sources) -> None:
     # Universal workflow settings
     self._set_verbosity(case.get_verbosity())
     self._initialize_runinfo(case)
-
-    # # Parse existing template nodes
-    # # variable groups
-    # self._parse_all_of_class(parent=find_node(self._template, "VariableGroups"), cls=VariableGroup)
-    # # data objects
-    # self._parse_all_of_class(parent=find_node(self._template, "DataObjects"), cls=PointSet)
-    # self._parse_all_of_class(parent=find_node(self._template, "DataObjects"), cls=DataSet)
 
   def writeWorkflow(self, destination, case, components, sources, run=False) -> None:
     """
@@ -132,7 +157,7 @@ class RavenTemplate(Template):
   #############################################
   # UTILITIES FOR ADDING SNIPPETS TO TEMPLATE #
   #############################################
-  def add_snippet(self, snippet: RavenSnippet, parent: str | ET.Element | None = None) -> None:
+  def _add_snippet(self, snippet: RavenSnippet, parent: str | ET.Element | None = None) -> None:
     """
     Add an XML snippet to the template XML
     @ In, snippet, RavenSnippet, the XML snippet to add
@@ -147,7 +172,10 @@ class RavenTemplate(Template):
       parent_path = parent
     else:
       # Find parent node based on snippet "class" attribute
-      parent_path = snippet.get_class()
+      parent_path = snippet.snippet_class
+
+    if parent_path is None:
+      raise ValueError(f"The path to a parent node for node {snippet} could not be determined!")
 
     # Make the parent node if it doesn't exist. This is helpful if it's unknown if top-level nodes (Models, Optimizers,
     # Steps, etc.) exist without having to add a check everywhere a snippet needs to get added.
@@ -168,21 +196,19 @@ class RavenTemplate(Template):
     @ In, components, list[Component], HERON component objects
     @ In, sources, list[Placeholder], placeholder objects for data sources
     """
-    # Set up some helpful variable groups
-    capacities_vargroup = self._create_capacities_vargroup("GRO_capacities", case, components)
-    self.add_snippet(capacities_vargroup)
-    results_vargroup = self._create_statistical_results_vargroup("GRO_results", case, components)
-    self.add_snippet(results_vargroup)
+    # Fetch some helpful variable groups
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
+    results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
 
     results_data = PointSet("grid")
-    results_data.set_inputs(capacities_vargroup)
-    results_data.set_outputs(results_vargroup)
-    self.add_snippet(results_data)
+    results_data.add_inputs(capacities_vargroup)
+    results_data.add_outputs(results_vargroup)
+    self._add_snippet(results_data)
 
     # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
-    sampler = GridSampler("grid")
+    sampler = Grid("grid")
     self._add_sampler_variables(sampler, case, components, sources)  # TODO
-    self.add_snippet(sampler)
+    self._add_snippet(sampler)
 
     # Add case labels to the sampler
     self._add_labels(sampler, case)
@@ -190,7 +216,7 @@ class RavenTemplate(Template):
     # Print the results of the optimization
     print_results = PrintOutStream("sweep")
     print_results.set_source(results_data)
-    self.add_snippet(print_results)
+    self._add_snippet(print_results)
 
     # Create a MultiRun step to run the sweep
     multirun = MultiRun("sweep")
@@ -199,7 +225,7 @@ class RavenTemplate(Template):
     multirun.add_model(model)
     multirun.add_output(results_data)
     multirun.add_output(print_results)
-    self.add_snippet(multirun)
+    self._add_snippet(multirun)
 
     # Add steps to the Sequence in RunInfo
     # FIXME: Dynamically figure out what order the steps should be in? (probably just leave it to the developer)
@@ -214,22 +240,20 @@ class RavenTemplate(Template):
     @ In, components, list[Component], HERON component objects
     @ In, sources, list[Placeholder], placeholder objects for data sources
     """
-    # Set up some helpful variable groups
-    capacities_vargroup = self._create_capacities_vargroup("GRO_capacities", case, components)
-    self.add_snippet(capacities_vargroup)
-    results_vargroup = self._create_statistical_results_vargroup("GRO_results", case, components)
-    self.add_snippet(results_vargroup)
+    # Fetch some helpful variable groups
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
+    results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
 
     # Create data objects for exporting optimization path and recording the points tried in the optimization
     solution_export = PointSet("opt_soln")
-    solution_export.set_inputs("trajID")
-    solution_export.set_outputs(["iteration", "accepted", capacities_vargroup, results_vargroup])
-    self.add_snippet(solution_export)
+    solution_export.add_inputs("trajID")
+    solution_export.add_outputs(["iteration", "accepted", capacities_vargroup, results_vargroup])
+    self._add_snippet(solution_export)
 
     results_data = PointSet("opt_eval")
-    results_data.set_inputs(capacities_vargroup)
-    results_data.set_outputs(results_vargroup)
-    self.add_snippet(results_data)
+    results_data.add_inputs(capacities_vargroup)
+    results_data.add_outputs(results_vargroup)
+    self._add_snippet(results_data)
 
     # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
     opt_strategy = case.get_opt_strategy()
@@ -254,7 +278,7 @@ class RavenTemplate(Template):
     print_results = PrintOutStream("opt_soln")
     print_results.set_source(solution_export)
     print_results.add_subelements(clusterLabel="trajID")
-    self.add_snippet(print_results)
+    self._add_snippet(print_results)
 
     # Create a MultiRun step to run the optimization
     multirun = MultiRun("optimize")
@@ -265,19 +289,19 @@ class RavenTemplate(Template):
     multirun.add_solution_export(solution_export)
     multirun.add_output(results_data)
     multirun.add_output(print_results)
-    self.add_snippet(multirun)
+    self._add_snippet(multirun)
 
     # Plot the result of the optimization
     opt_path_plot = OptPathPlot("opt_path")
     opt_path_plot.set_source(solution_export)
     # opt_metric, _ = case.get_opt_metric()  # optimization metric name
     opt_path_plot.set_vars(["GRO_capacities", objective])
-    self.add_snippet(opt_path_plot)
+    self._add_snippet(opt_path_plot)
 
-    plot_step = IOStep(f"plot_{opt_path_plot.get_name()}")
+    plot_step = IOStep(f"plot_{opt_path_plot.name}")
     plot_step.add_input(solution_export)
     plot_step.add_output(opt_path_plot)
-    self.add_snippet(plot_step)
+    self._add_snippet(plot_step)
 
     # Add steps to the Sequence in RunInfo
     # FIXME: Dynamically figure out what order the steps should be in? (probably just leave it to the developer)
@@ -299,70 +323,6 @@ class RavenTemplate(Template):
     """
     self._template.set("verbosity", verbosity)
 
-  def _set_parallel_settings(self, num_sampled_vars: int, case: Case) -> None:
-    case.outerParallel = num_sampled_vars + 1
-    run_info = self._template.find("RunInfo")
-    batch_size = run_info.find("batchSize")
-    batch_size.text = batch_size
-    internal_parallel = ET.SubElement(run_info, "internalParallel")
-    internal_parallel.text = "True"
-
-  def _parse_expected(self, parent: ET.Element, expected_nodes: list[dict]) -> list[RavenSnippet]:
-    """
-    Parses the children of a parent node according to expected child nodes. The nodes in expected_nodes must be
-    defined. Additional nodes in the template XML are not a problem.
-    @ In, parent, ET.Element, section parent node
-    @ In, expected_nodes, list[dict], a list of expected nodes with required keys "tag" and "class"
-    @ Out, parsed_nodes, list[RavenSnippet], list of parsed RavenSnippet objects
-    """
-    if not expected_nodes:
-      return
-
-    parsed_nodes = []
-    for node_params in expected_nodes:
-      # Find the specified model node
-      tag = node_params.pop("tag")
-      cls = node_params.pop("class")
-      node_path = f"{tag}"
-      attribs = [f"@{k}='{v}'" for k, v in node_params.items()]
-      if attribs:
-        node_path += "[" + " and ".join(attribs) + "]"
-      default_node = parent.find(node_path)
-
-      if default_node is None:
-        raise ValueError(f"Template was expected to have a <{tag}> node with attributes {node_params} "
-                         "under parent node {parent}, but no such node was found.")
-
-      # Instantiate a Model object for the node
-      new_node = cls.from_xml(default_node)
-      idx = get_node_index(parent, default_node)
-      parent.remove(default_node)
-      parent.insert(idx, new_node)
-
-      parsed_nodes.append(new_node)
-
-    return parsed_nodes
-
-  def _parse_all_of_class(self, parent: ET.Element, cls: RavenSnippet) -> list[RavenSnippet]:
-    """
-    Parse all children of a parent node of a specific RavenSnippet class.
-    @ In, parent, ET.Element, the parent node
-    @ In, cls, RavenSnippet, a RavenSnippet class which implements a from_xml class method.
-    @ Out, parsed_nodes, list[RavenSnippet], list of parsed RavenSnippet objects
-    """
-    if not hasattr(cls, "from_xml"):
-      raise ValueError(f"The class {cls.__name__} does not have a 'from_xml' class method.")
-
-    parsed_nodes = []
-    for i, child in enumerate(parent):
-      if child.tag == cls.__name__:
-        new_node = cls.from_xml(child)
-        parent.remove(child)
-        parent.insert(i, new_node)
-        parsed_nodes.append(new_node)
-
-    return parsed_nodes
-
   # RunInfo
   def _initialize_runinfo(self, case: Case, case_name: str = "") -> RunInfo:
     """
@@ -371,13 +331,7 @@ class RavenTemplate(Template):
     @ In, case_name, str, optional, the case name
     @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
-    if (default_run_info := self._template.find("RunInfo")) is not None:
-      run_info = RunInfo.from_xml(default_run_info)
-      self._template.remove(default_run_info)
-    else:
-      run_info = RunInfo()
-    # Put the RunInfo node at the top of the XML tree
-    self._template.insert(0, run_info)
+    run_info = self._template.find("RunInfo")
 
     if case_name:
       run_info.job_name = case_name
@@ -390,7 +344,7 @@ class RavenTemplate(Template):
     sequence.add_step(step, index)
 
   # Steps
-  def _rom_load_step(self, source: Placeholder) -> IOStep:
+  def _load_rom(self, source: Placeholder, rom: Model) -> IOStep:
     rom_name = source.name
     rom_source = source._target_file
 
@@ -398,12 +352,12 @@ class RavenTemplate(Template):
     step_name = self.namingTemplates["stepname"].format(action="read", subject=rom_name)
     step = IOStep(step_name)
     step.append(self._assemblerNode("Input", "Files", "", rom_source))
-    step.append(self._assemblerNode("Output", "Models", "ROM", rom_name))
+    step.append(rom.to_assembler_node("Output"))
 
-    self.add_snippet(step)
+    self._add_snippet(step)
     return step
 
-  def _rom_meta_print_step(self, rom: Model) -> IOStep:
+  def _print_rom_meta(self, rom: Model) -> IOStep:
     """
     Create an IOStep to print the metadata for a ROM. Makes and adds the requisite DataSet and OutStream nodes.
     @ In, rom, Model, the ROM
@@ -412,12 +366,12 @@ class RavenTemplate(Template):
     # Create the output data object
     dataset_name = f"{rom.name}_meta"
     dataset = DataSet(dataset_name)
-    self.add_snippet(dataset)
+    self._add_snippet(dataset)
 
     # Create the outstream for the dataset
     outstream = PrintOutStream(dataset_name)
     outstream.set_source(dataset)
-    self.add_snippet(outstream)
+    self._add_snippet(outstream)
 
     # create step
     step_name = self.namingTemplates["stepname"].format(action="print_meta", subject=rom.name)
@@ -425,7 +379,7 @@ class RavenTemplate(Template):
     step.append(rom.to_assembler_node("Input"))
     step.append(dataset.to_assembler_node("Output"))
     step.append(outstream.to_assembler_node("Output"))
-    self.add_snippet(step)
+    self._add_snippet(step)
 
     return step
 
@@ -433,79 +387,46 @@ class RavenTemplate(Template):
     pass
 
   # VariableGroups
-  def _parse_variable_groups(self) -> None:
-    """
-    Reads existing variable groups in the template XML and replaces the nodes with VariableGroup objects
-    """
-    vargroups = find_node("VariableGroups")
-    for i, default_group in enumerate(vargroups.findall("Group")):
-      new_group = VariableGroup.from_xml(default_group)
-      vargroups.remove(default_group)
-      vargroups.insert(i, new_group)
-
-  def _create_capacities_vargroup(self, name: str, case: Case, components: list[Component]) -> VariableGroup:
+  def _get_capacity_vars(self, case: Case, components: list[Component]) -> list[str]:
     """
     Collects component capacity and dispatch opt variable names to form a variable group
-    @ In, name, str, name of the variable group
     @ In, case, Case, HERON case
     @ In, components, list[Component], HERON components
-    @ Out, caps, VariableGroup, capacities variable group
+    @ Out, var_names, list[str], list of variable names
     """
-    caps = VariableGroup(name)
+    var_names = []  # list[str]
     # Add component opt vars
     for comp in components:
       comp_cap_type = comp.get_capacity(None, raw=True).type
       if comp_cap_type not in ["Function", "ARMA", "SyntheticHistory", "StaticHistory"]:
-        caps.add_variable(f"{comp.name}_capacity")
+        var_names.append(f"{comp.name}_capacity")
     # Add dispatch opt vars
     for var in case.dispatch_vars.keys():
-      caps.add_variable(f"{var}_dispatch")
-    return caps
+      var_names.append(f"{var}_dispatch")
+    return var_names
 
-  def _create_statistical_results_vargroup(self, name: str, case: Case, components: list[Component]) -> VariableGroup:
+  def _get_statistical_results_vars(self, case: Case, components: list[Component]) -> list[str]:
     """
-    Collects result metric names for statistical metrics in a variable group
+    Collects result metric names for statistical metrics
     @ In, case, Case, HERON case
     @ In, components, list[Component], HERON components
-    @ Out, results, VariableGroup, results variable group
+    @ Out, var_names, list[str], list of variable names
     """
-    results = VariableGroup(name)
-
     # Add statistics for economic metrics to variable group. Use all statistics.
     default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
     stats_names = set(default_names) | set(case.get_result_statistics())
     econ_metrics = case.get_econ_metrics(nametype="output")
     stats_var_names = self._get_result_statistic_names(econ_metrics, stats_names, case)
-    results.add_variable(*stats_var_names)
 
     # Add total activity statistics for variable group. Use only non-financial statistics.
     non_fin_stat_names = stats_names - set(self.FINANCIAL_STATS_NAMES)
-    tot_activity_metrics = self._get_activity_metrics(components)
+    # tot_activity_metrics = self._get_activity_metrics(components)
+    tot_activity_metrics = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
     activity_var_names = self._get_result_statistic_names(tot_activity_metrics, non_fin_stat_names, case)
-    results.add_variable(*activity_var_names)
 
-    return results
+    var_names = stats_var_names + activity_var_names
 
-  # FIXME duplicate method
-  def _get_stats_prefixes(self, case, stats_names=[], use_extra=True):
-    """
-      Constructs the prefixes of the statistics requested for output
-      @ In, case, HERON Case, defining Case instance
-      @ In, stats_names, list, list of names of statistics requested for application to econ metrics
-      @ In, use_extra, bool, optional (default=True), ?? TODO
-      @ Out, output, list, list of prefixes of statistics requested for output
-    """
-    _stats_names = stats_names or self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    output_names = []
-    for name in _stats_names:
-      # we are assuming here that all stats metrics are applicable to all econ metrics.
-      # revisit if this changes (e.g., we disallow "VaR" for IRR)
-      output = case.stats_metrics_meta[name]['prefix']  # "name" abbreviation (e.g. "gainLossRatio" -> "glr")
-      if name == "percentile" and use_extra:
-        output_names.extend([f"{output}_{perc}" for perc in case.stats_metrics_meta[name]['percent']])
-      else:
-        output_names.append(output)
-    return output_names
+    return var_names
 
   def _get_activity_metrics(self, components: list[Component]):
     """
@@ -535,9 +456,9 @@ class RavenTemplate(Template):
     #        RAVEN samplers are used at the moment (Grid, Stratified, MonteCarlo, Custom), so only these are
     #        supported here.
     sampler_var = SamplerVariable(var_name)
-    if isinstance(sampler, (GridSampler, StratifiedSampler, MonteCarloSampler)):
+    if isinstance(sampler, (Grid, Stratified, MonteCarlo)):
       sampler_var.set_distribution(dist)
-    if isinstance(sampler, (GridSampler, StratifiedSampler)):
+    if isinstance(sampler, (Grid, Stratified)):
       # TODO: where do these parameters come from?
       sampler_var.set_sampling_strategy(construction="equal", type="CDF", steps=4, values=[0, 1])
 
@@ -559,7 +480,7 @@ class RavenTemplate(Template):
       if isinstance(vals, list):
         # Create distribution and sampler variable nodes
         dist, sampler_var = self._create_new_capacity_variable(comp_name, var_name, vals, sampler)
-        self.add_snippet(dist)
+        self._add_snippet(dist)
         sampler.append(sampler_var)
 
   def _get_result_statistic_names(self, names: list[str], stats: list[str], case: Case):
@@ -571,10 +492,10 @@ class RavenTemplate(Template):
       @ Out, names, list, list of names of statistics requested for output
     """
     stat_prefixes = self._get_stat_prefixes(stats, case)
-    stat_names = [f"{prefix}_{name}" for prefix, name in itertools.product(stat_prefixes, names)]
+    stat_names = [f"{prefix}_{name}" for name, prefix in itertools.product(names, stat_prefixes)]
     return stat_names
 
-  @staticmethod  # FIXME duplicate method
+  @staticmethod
   def _get_stat_prefixes(stat_names: list[str], case: Case) -> list[str]:
     """
     Get all statistics prefixes for a list of statistic names
@@ -600,6 +521,16 @@ class RavenTemplate(Template):
             stat_prefixes.append(f"{prefix}_{val}")
 
     return stat_prefixes
+
+  # Models
+  def _pickled_rom_from_source(self, source: Placeholder) -> PickledROM:
+    rom = PickledROM(source.name)
+    if source.needs_multiyear is not None:
+      rom.add_subelements({"Multicycle" : {"cycles": source.needs_multiyear}})
+    if source.limit_interp is not None:
+      rom.add_subelements(maxCycles=source.limit_interp)
+    self._add_snippet(rom)
+    return rom
 
   # Distributions
   def _create_uniform_variable(self, comp_name, var_name, capacities, sampler_type) -> tuple[Distribution, SamplerVariable]:
@@ -639,7 +570,7 @@ class RavenTemplate(Template):
       vals = value.get_value(debug=case.debug["enabled"])  # FIXME refactor into separate debug mode
       if isinstance(vals, list):
         dist, sampler_var = self._create_uniform_variable(key, var_name, vals, "opt")  # FIXME
-        self.add_snippet(dist)
+        self._add_snippet(dist)
         sampler.add_variable(sampler_var)
 
     # Add component capacity variables
@@ -655,7 +586,7 @@ class RavenTemplate(Template):
       vals = cap.get_value(debug=case.debug["enabled"])  # FIXME: refactor debug mode into separate template
       if isinstance(vals, list):
         dist, sampler_var = self._create_uniform_variable(name, var_name, vals, "opt")  # FIXME
-        self.add_snippet(dist)
+        self._add_snippet(dist)
         if case.get_opt_strategy() == "BayesianOpt" and case.get_mode() == "opt" and not case.debug["enabled"]:  # TODO ugly
           # sampler_var.remove(sampler_var.find("initial"))  # FIXME: no subtractive XML operations!
           sampler_var.set_sampling_strategy(construction="equal", type="CDF", steps=10, values=[0, 1])
@@ -682,13 +613,13 @@ class RavenTemplate(Template):
     """
     # Create major XML blocks
     optimizer = BayesianOptimizer("opt")
-    sampler = StratifiedSampler("lhs")
+    sampler = Stratified("lhs")
     model = GaussianProcessRegressor("gpr")
 
     # Add blocks to XML template
-    self.add_snippet(optimizer)
-    self.add_snippet(sampler)
-    self.add_snippet(model)
+    self._add_snippet(optimizer)
+    self._add_snippet(sampler)
+    self._add_snippet(model)
 
     # Connect optimizer to sampler and ROM components
     optimizer.set_sampler(sampler)
@@ -717,8 +648,8 @@ class RavenTemplate(Template):
 
   def _create_gradient_descent(self, case, components, sources):
     # Create necessary XML blocks
-    optimizer = GradientDescentOptimizer("opt")
-    self.add_snippet(optimizer)
+    optimizer = GradientDescent("opt")
+    self._add_snippet(optimizer)
 
     # Apply any specified optimization settings
     opt_settings = case.get_optimization_settings()

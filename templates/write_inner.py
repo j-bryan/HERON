@@ -22,7 +22,7 @@ def modifyInput(root: ET.Element, mod_dict: dict) -> ET.Element:
   for k, v in mod_dict.items():
     if match := re.search(pattern, k):
       comp = match.group()
-      const = mc.find(f"constant[@name='{comp}_capacity']").text =
+      const = mc.find(f"constant[@name='{comp}_capacity']")
       const.text = mod_dict[f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{comp}_capacity"]
 
   return root

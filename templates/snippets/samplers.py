@@ -17,8 +17,10 @@ from .distributions import Distribution
 # FIXME: The <variable> node in a sampler accepts different children depending on the sampler type. Perhaps it would be
 #        better to defer this capability to the sampler classes?
 class SamplerVariable(RavenSnippet):
+  tag = "variable"
+
   def __init__(self, name: str) -> None:
-    super().__init__("variable", name)
+    super().__init__(name)
 
   def set_distribution(self, distribution: Distribution) -> None:
     """
@@ -45,8 +47,10 @@ class SamplerVariable(RavenSnippet):
     initial.text = _to_string(value)
 
 class Sampler(RavenSnippet):
-  def __init__(self, tag: str, name: str) -> None:
-    super().__init__(tag, name, class_name="Samplers")
+  snippet_class = "Samplers"
+
+  def __init__(self, name: str) -> None:
+    super().__init__(name)
     # TODO: samplerInit node?
     self._num_sampled_vars = 0
 
@@ -61,7 +65,9 @@ class Sampler(RavenSnippet):
     constant = ET.SubElement(self, "constant", attrib={"name": name})
     constant.text = _to_string(value)
 
-class GridSampler(Sampler):
+class Grid(Sampler):
+  tag = "Grid"
+
   def __init__(self, name: str):
     super().__init__("Grid", name)
     # Grid sampler denoises defaults to 1
@@ -71,14 +77,11 @@ class GridSampler(Sampler):
   def add_variable(self, variable: SamplerVariable):
     pass
 
-class MonteCarloSampler(Sampler):
-  def __init__(self, name: str) -> None:
-    super().__init__("MonteCarlo", name)
+class MonteCarlo(Sampler):
+  tag = "MonteCarlo"
 
-class StratifiedSampler(Sampler):
-  def __init__(self, name: str) -> None:
-    super().__init__("Stratified", name)
+class Stratified(Sampler):
+  tag = "Stratified"
 
 class CustomSampler(Sampler):
-  def __init__(self, name: str) -> None:
-    super().__init__("CustomSampler", name)
+  tag = "CustomSampler"

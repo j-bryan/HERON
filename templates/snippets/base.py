@@ -1,4 +1,5 @@
 from typing import Any
+import inspect
 import xml.etree.ElementTree as ET
 
 from ..xml_utils import _to_string
@@ -9,39 +10,30 @@ class RavenSnippet(ET.Element):
   RavenSnippet class objects describe one contiguous snippet of RAVEN XML, inheriting from the xml.etree.ElementTree.Element
   class. This base class contains methods for quickly building subtrees and set and access common RAVEN node attributes.
   """
-  # TODO: alternative constructor using existing node from template?
+  tag = None  # XML tag associated with the snippet class
+  snippet_class = None  # class of Entity described by the snippet (e.g. Models, Optimizers, Samplers, DataObjects, etc.)
+  subtype = None  # subtype of the snippet entity, does not need to be defined for all snippets
 
   def __init__(self,
-               tag: str,
                name: str | None = None,
-               class_name: str | None = None,
-               subtype_name: str | None = None,
                subelements: dict[str, Any] = {},
                **kwargs) -> None:
     """
     @ In, name, str, the name of the entity
-    @ In, class_name, str, the name of the class the entity belongs too (e.g. Models, Optimizers, DataObjects)
-    @ In, type_name, str, the entity's type (e.g. Code, ROM, PointSet)
-    @ In, subtype_name, str, optional, the entity's subtype (e.g. RAVEN as a subtype of Code)
     @ In, subelements, dict[str, Any], optional, keyword settings which are added as XML child nodes
     @ In, kwargs, dict, optional, additional keyword arguments added to the Element attributes
     @ Out, None
     """
-    super().__init__(tag)
+    super().__init__(self.tag)
 
     # Update node attributes with provided values
     # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and provide
     # an easy interface to set the common attributes "name" and "subType".
     if name is not None:
       self.attrib["name"] = name
-    if subtype_name is not None:
-      self.attrib["subType"] = subtype_name
+    if self.subtype is not None:
+      self.attrib["subType"] = self.subtype
     self.attrib.update(kwargs)
-
-    # The snippet class is not typically one of the XML node attributes. However, it's useful to hold onto this
-    # information since this can tell us where in the XML snippet belongs and helps us construct an assmbler node
-    # from the snippet.
-    self._class = class_name
 
     self.add_subelements(subelements)
 
@@ -64,44 +56,22 @@ class RavenSnippet(ET.Element):
     # Default implementation is to copy everything from the existing node into a new RavenSnippet object.
     # Note that the snippet_class attribute does not show up in the XML, so subclasses relying on this
     # default implementation will not have that attribute set.
-    snippet = cls(node.tag)
+    init_signature = inspect.signature(cls.__init__)
+    init_params = {k: node.get(k, v.default) for k, v in init_signature.parameters.items()}  # first argument is "self"; skip it
+    init_params.pop("self")
+    snippet = cls(**init_params)
     snippet.attrib.update(node.attrib)
     snippet.text = node.text
     for child in node:
       snippet.append(child)
     return snippet
 
-  # Attribute getters
-  # NOTE: Using properties would be more pythonic, but the unfortunate naming of the "class" attribute for RAVEN nodes
-  # leads to issues with a property like "snippet.class" conflicting with the protected keyword "class".
+  # Attribute accessors
   @property
   def name(self) -> str:
     return self.attrib.get("name", "")
 
-  @property
-  def snippet_class(self) -> str | None:
-    return self._class
-
-  @property
-  def type(self) -> str:
-    return self.tag
-
-  @property
-  def subtype(self) -> str:
-    return self.attrib.get("subType", "")
-
-  def get_name(self) -> str:
-    return self.attrib.get("name", "")
-
-  def get_class(self) -> str | None:
-    return self._class
-
-  def get_type(self) -> str:
-    return self.tag
-
-  def get_subtype(self) -> str | None:
-    return self.attrib.get("subType", None)
-
+  # Subtree building utilities
   def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:
     """
     Add subelements by either providing a dict or keyword arguments.
@@ -157,7 +127,7 @@ class RavenSnippet(ET.Element):
 
     node = ET.Element(tag)
     node.attrib["class"] = self.snippet_class
-    node.attrib["type"] = self.type
+    node.attrib["type"] = self.tag
     node.text = self.name
 
     return node

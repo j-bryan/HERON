@@ -2,6 +2,7 @@ import re
 from typing import Any
 import xml.etree.ElementTree as ET
 
+
 def parse_xpath(xpath: str):
   """
   Parses an XPath with possible attributes and text content into a list of dictionaries.

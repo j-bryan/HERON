@@ -18,9 +18,11 @@ from .dataobjects import DataObject
 
 class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance structure
   """ A base class for RAVEN optimizer XML snippets """
-  def __init__(self, tag: str, name: str):
-    super().__init__(tag, name)
-    self._class = "Optimizers"  # Sampler parent class had set this to "Samplers"
+  snippet_class = "Optimizers"
+
+  def __init__(self, name: str):
+    super().__init__(name)
+    # "objective" and "TargetEvaluation" subnodes are required for all optimizers implemented here
     ET.SubElement(self, "objective")
     ET.SubElement(self, "TargetEvaluation")
 
@@ -66,6 +68,8 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
 #########################
 
 class BayesianOptimizer(Optimizer):
+  tag = "BayesianOptimizer"
+
   default_settings = {
     "samplerInit": {
       "limit": 100,
@@ -87,7 +91,7 @@ class BayesianOptimizer(Optimizer):
   }
 
   def __init__(self, name: str):
-    super().__init__("BayesianOptimizer", name)
+    super().__init__(name)
     # Set settings to default on initialization. Can be modified later via the set_opt_settings method.
     self.add_subelements(self.default_settings)
 
@@ -98,7 +102,18 @@ class BayesianOptimizer(Optimizer):
 
     # acquisition function
     acquisition = self.find("Acquisition")
-    acquisition.append(AcquisitionFunction(bo_settings.get("acquisition", "ExpectedImprovement")))
+    acq_func_name = bo_settings.get("acquisition", "ExpectedImprovement")
+    acq_funcs = {
+      "ExpectedImprovement": ExpectedImprovement,
+      "ProbabilityOfImprovement": ProbabilityOfImprovement,
+      "LowerConfidenceBound": LowerConfidenceBound
+    }
+    try:
+      # FIXME: No acquisition function parameters are exposed to the HERON user
+      acq_func = acq_funcs.get(acq_func_name)()
+      acquisition.append(acq_func)
+    except KeyError:
+      raise ValueError(f"Unrecognized acquisition function {acq_func_name}. Allowed: {acq_funcs.keys()}")
 
     # random seed
     if "seed" in bo_settings:
@@ -122,39 +137,56 @@ class BayesianOptimizer(Optimizer):
       self.remove(rom_node)
     self.append(rom.to_assembler_node("ROM"))
 
-class AcquisitionFunction(RavenSnippet):
-  # Default acquisition function settings. Note that some of these settings differ from the RAVEN defaults!
+class ExpectedImprovement(RavenSnippet):
+  tag = "ExpectedImprovement"
+
   default_settings = {
-    "ExpectedImprovement": {
-      "optimizationMethod": "differentialEvolution",
-      "seedingCount": 30
-    },
-    "ProbabilityOfImprovement": {
-      "optimizationMethod": "differentialEvolution",
-      "seedingCount": 30,
-      "epsilon": 1,
-      "rho": 20,
-      "transient": "Constant"
-    },
-    "LowerConfidenceBound": {
-      "optimizationMethod": "differentialEvolution",
-      "seedingCount": 30,
-      "epsilon": 1,
-      "rho": 20,
-      "transient": "Constant"
-    }
+    "optimizationMethod": "differentialEvolution",
+    "seedingCount": 30
   }
 
-  def __init__(self, tag: str, settings: dict = {}):
-    algo_settings = self.default_settings[tag]
-    algo_settings.update(settings)
-    super().__init__(tag, subelements=algo_settings)
+  def __init__(self, settings: dict = {}) -> None:
+    settings = self.default_settings | settings
+    super().__init__(subelements=settings)
+
+class ProbabilityOfImprovement(RavenSnippet):
+  tag = "ProbabilityOfImprovement"
+
+  default_settings = {
+    "optimizationMethod": "differentialEvolution",
+    "seedingCount": 30,
+    "epsilon": 1,
+    "rho": 20,
+    "transient": "Constant"
+  }
+
+  def __init__(self, settings: dict = {}) -> None:
+    settings = self.default_settings | settings
+    super().__init__(subelements=settings)
+
+class LowerConfidenceBound(RavenSnippet):
+  tag = "LowerConfidenceBound"
+
+  default_settings = {
+    "optimizationMethod": "differentialEvolution",
+    "seedingCount": 30,
+    "epsilon": 1,
+    "rho": 20,
+    "transient": "Constant"
+  }
+
+  def __init__(self, settings: dict = {}) -> None:
+    settings = self.default_settings | settings
+    super().__init__(subelements=settings)
+
 
 ####################
 # Gradient Descent #
 ####################
 
-class GradientDescentOptimizer(Optimizer):
+class GradientDescent(Optimizer):
+  tag = "GradientDescent"
+
   default_settings = {
     "gradient": {  # CentralDifference, SPSA not exposed in HERON input
       "FiniteDifference": ""  # gradDistanceScalar option not exposed
@@ -177,7 +209,7 @@ class GradientDescentOptimizer(Optimizer):
   }
 
   def __init__(self, name: str) -> None:
-    super().__init__("GradientDescent", name)
+    super().__init__(name)
     self.add_subelements(self.default_settings)
 
   def set_opt_settings(self, opt_settings: dict) -> None:

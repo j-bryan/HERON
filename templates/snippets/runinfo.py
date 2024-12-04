@@ -1,13 +1,15 @@
 import xml.etree.ElementTree as ET
 
-# from .base import RavenSnippet
+from .base import RavenSnippet
 from .steps import Step
 from ..xml_utils import find_node
 
 
-class Sequence(ET.Element):
+class Sequence(RavenSnippet):
+  tag = "Sequence"
+
   def __init__(self) -> None:
-    super().__init__("Sequence")
+    super().__init__()
     # TODO: Storing Step objects instead of just their names could let us dynamically decide the order of steps by
     # looking at step inputs and outputs.
     self._steps = []  # list[str]
@@ -25,9 +27,11 @@ class Sequence(ET.Element):
 
     self.text = self._steps
 
-class RunInfo(ET.Element):
+class RunInfo(RavenSnippet):
+  tag = "RunInfo"
+
   def __init__(self) -> None:
-    super().__init__("RunInfo")
+    super().__init__()
     # Save required nodes as attributes for easy access
     # The ugly naming convention helps to access the attributes from the node names. These names are
     # hidden to external code, with access provided through properties with pythonic names.
@@ -77,7 +81,7 @@ class RunInfo(ET.Element):
   def add_step_to_sequence(self, step: Step) -> None:
     self._Sequence.add_step(step)
 
-  # Properties and accessors
+  # Attribute accessors
   @property
   def job_name(self) -> str:
     return self._JobName.text

@@ -5,6 +5,7 @@ import shutil
 import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet
+from .dataobjects import DataObject
 from .databases import Database
 
 # load utils
@@ -17,15 +18,20 @@ RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework
 
 
 class Model(RavenSnippet):
-  def __init__(self, tag: str, name: str, subtype_name: str = "", settings: dict[str, Any] = {}):
-    super().__init__(tag, name, class_name="Models", subtype_name=subtype_name, subelements=settings)
+  snippet_class = "Models"
+
+  def __init__(self, name: str, settings: dict[str, Any] = {}):
+    super().__init__(name, subelements=settings)
 
 class RavenCode(Model):
   """
   Sets up a <Code> model to run inner RAVEN workflow.
   """
+  tag = "Code"
+  subtype = "RAVEN"
+
   def __init__(self, name: str):
-    super().__init__("Code", name, "RAVEN")
+    super().__init__(name)
     self._set_executable()
 
   def _set_executable(self, path: str | None = None) -> None:
@@ -87,36 +93,10 @@ class RavenCode(Model):
     # output_node = ET.SubElement(raven, output_tags.get(data_handling))
     # output_node.text = output_target
 
-class DispatchDataHandling(RavenSnippet):
-  """  """
-  def __init__(self, name: str):
-    self._name = name
-
-  def edit_template(self, template, case, components, sources):
-    # Create appropriate Database or DataObject depending on selected handling
-    data_handling = case.data_handling["inner_to_outer"]
-    if data_handling == "netcdf":  # Make a NetCDF database
-      self._handle_with_database(template, case)
-    elif data_handling == "csv":  # Make a PointSet or HistorySet and an OutStream which directs that DataObject to CSV
-      self._handle_with_csv(template, case)
-    else:
-      raise ValueError(f"Inner data handling must use one of ['netcdf', 'csv']. Received {data_handling}.")
-
-  def _handle_with_database(self, template, case):
-    databases = template.find("Databases")
-
-    if databases.find(f"NetCDF[@name={self._name}]"):  # Is the required database already in the XML?
-      return
-
-    database = Database(self._name, type_name="NetCDF", read_mode="overwrite")
-    databases.append(database.to_xml())
-
-  def _handle_with_csv(self, template, case):
-    data_objects = template.find("DataObjects")
-    # if data_objects.find(f"PointSet[@name={self._name}]") or data_objects.find(f"HistorySet[@name={self._name}]"):
-    outstreams = template.find("OutStreams")
-
 class GaussianProcessRegressor(Model):
+  tag = "ROM"
+  subtype = "GaussianProcessRegressor"
+
   default_settings = {
     "Features": "",  # needs case & component info to populate
     "Target": "",    # needs case & component info to populate
@@ -131,13 +111,13 @@ class GaussianProcessRegressor(Model):
 
   def __init__(self, name: str):
     # FIXME: Only custom_kernel setting exposed to HERON input
-    super().__init__("ROM", name, "GaussianProcessRegressor", self.default_settings)
+    super().__init__(name, self.default_settings)
     self._features = []
 
   def add_feature(self, feature: str):
     self._features.append(feature)
     features_node = self.find("Features")
-    features_node.text = ", ".join(self._features)
+    features_node.text = self._features
 
   def set_target(self, target: str):
     target_node = self.find("Target")
@@ -147,21 +127,31 @@ class GaussianProcessRegressor(Model):
     kernel_node = self.find("custom_kernel")
     kernel_node.text = kernel
 
-class EnsembleModel(RavenSnippet):
-  def __init__(self, name: str, *models: Model):
-    super().__init__(name, "Models", "EnsembleModel")
-    self.models = models
+class EnsembleModel(Model):
+  tag = "EnsembleModel"
+  subtype = ""
 
-  def to_xml(self):
-    # Make EnsembleModel entity node
-    ensemble_model = super().to_xml()
+class EconomicRatioPostProcessor(Model):
+  tag = "PostProcessor"
+  subtype = "EconomicRatio"
 
-    # The models are added as child Assembler nodes
-    for model in self.models:
-      pass
-
-class PostProcessor(Model):
-  pass
+  def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
+    node = ET.SubElement(self, tag, prefix=prefix, **kwargs)
+    node.text = variable
 
 class ExternalModel(Model):
-  pass
+  tag = "ExternalModel"
+  subtype = ""
+
+  def __init__(self, name: str, subtype: str = "") -> None:
+    super().__init__(name)
+    self.subtype = subtype
+    self._variables = []  # list[str]
+
+  def add_variable(self, *vars: str) -> None:
+    self._variables.extend(vars)
+    self.text = self._variables
+
+class PickledROM(Model):
+  tag = "ROM"
+  subtype = "pickledROM"

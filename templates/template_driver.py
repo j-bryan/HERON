@@ -14,7 +14,9 @@ import itertools as it
 import numpy as np
 import dill as pk
 
-from templates.raven_templates import RavenTemplate, BilevelTemplate, FlatMultiConfigTemplate, FlatMultiDispatchTemplate
+from .raven_template import RavenTemplate
+from .bilevel_templates import BilevelTemplate
+from .flat_templates import FlatMultiConfigTemplate, FlatMultiDispatchTemplate
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -1086,7 +1088,6 @@ class Template(TemplateBase, Base):
                 attrib={'name': self.namingTemplates['cluster_index']}
             )
         )
-
 
   def _modify_inner_caselabels(self, template, case):
     """
