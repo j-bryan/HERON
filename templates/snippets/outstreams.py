@@ -25,7 +25,6 @@ class OutStream(RavenSnippet):
 
   def __init__(self, name: str):
     super().__init__(name)
-    ET.SubElement(self, "source")
 
 class PrintOutStream(OutStream):
   tag = "Print"

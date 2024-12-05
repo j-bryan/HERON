@@ -218,10 +218,20 @@ def find_node(parent: ET.Element, tag: str, make_if_missing: bool = True) -> ET.
   @ Out, node, ET.Element, the found or created node
   """
   node = parent.find(tag)
-  if node is None and make_if_missing:
-    node = parent
-    for child_params in parse_xpath(tag):
-      node = ET.SubElement(node, child_params["tag"], child_params["attrib"])
+  if node is not None or not make_if_missing:
+    return node
+
+  # We need to make the child node before returning. There may be an intermediate subtree
+  # described in the tag, so we need to make any intermediate nodes along the way to the
+  # final child node.
+  node = parent
+  raw_splits = [p.strip() for p in tag.split("/")]
+  for child_xpath, child_params in zip(raw_splits, parse_xpath(tag)):
+    next_node = node.find(child_xpath)
+    if next_node is None:
+      next_node = ET.SubElement(node, child_params["tag"], child_params["attrib"])
+    node = next_node
+
   return node
 
 def get_node_index(parent: ET.Element, child: ET.Element) -> int | None:

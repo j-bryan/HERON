@@ -35,8 +35,8 @@ class DebugTemplate(RavenTemplate):
   def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
     super().createWorkflow(case, components, sources)
 
-    self._update_debug_vargroups(components, sources)
-    self._update_debug_dataobjects(case)
+    self._update_vargroups(case, components, sources)
+    self._update_dataset_indices(case)
 
     # Using a static history CSV or an ARMA ROM?
     #   - if ROM, copy ensemble model workflow from InnerTemplate
@@ -65,10 +65,24 @@ class DebugTemplate(RavenTemplate):
     debug_iostep = self._template.find("Steps/IOStep[@name='debug_output']")
     if case.debug["dispatch_plot"]:
       disp_plot = HeronDispatchPlot("dispatchPlot")
+      dispatch = self._template.find("DataObjects/DataSet[@name='dispatch']")
+      disp_plot.source = dispatch
+      disp_plot.macro_variable = case.get_year_name()
+      disp_plot.micro_variable = case.get_time_name()
+
+      signals = set()
+      for source in sources:
+        new = source.get_variable()
+        if new is not None:
+          signals.update(set(new))
+      disp_plot.signals = list(signals)
+
       self._add_snippet(disp_plot)
       debug_iostep.add_output(disp_plot)
     if case.debug["cashflow_plot"]:
       cashflow_plot = TealCashFlowPlot("cashflow_plot")
+      cashflows = self._template.find("DataObjects/HistorySet[@name='cashflows']")
+      cashflow_plot.source = cashflows
       self._add_snippet(cashflow_plot)
       debug_iostep.add_output(cashflow_plot)
 
@@ -94,6 +108,9 @@ class DebugTemplate(RavenTemplate):
     ensemble = EnsembleModel("sample_and_dispatch")
     self._add_snippet(ensemble)
 
+    # Add Function sources as Files
+    functions = self._get_function_files(sources)
+
     # Fetch the dispatch model and add it to the ensemble. The model and associated data objects already exist
     # in the template XML.
     dispatcher = self._template.find("Models/ExternalModel[@subType='HERON.DispatchManager']")
@@ -101,6 +118,8 @@ class DebugTemplate(RavenTemplate):
     disp_placeholder = self._template.find("DataObjects/PointSet[@name='dispatch_placeholder']")
     disp_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
     dispatcher_assemb.append(disp_placeholder.to_assembler_node("Input"))
+    # for func in functions:
+    #   dispatcher_assemb.append(func.to_assembler_node("Input"))
     dispatcher_assemb.append(disp_eval.to_assembler_node("TargetEvaluation"))
     ensemble.append(dispatcher_assemb)
 
@@ -132,20 +151,22 @@ class DebugTemplate(RavenTemplate):
     results_vars = self._get_statistical_results_vars(case, components)
     vg_final_return.add_variables(*results_vars)
 
-    # # Fill out statistics to be calculated by the postprocessor
-    # # TODO: refactor to function
-    # pp = EconomicRatioPostProcessor("statistics")
-    # self._add_snippet(pp)
-    # default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    # stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
-    # self._add_stats_to_postprocessor(pp, stats_names, econ_vars, case.stats_metrics_meta)
-    # # Activity metrics with non-financial statistics
-    # non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
-    # self._add_stats_to_postprocessor(pp, non_fin_stat_names, activity_vars, case.stats_metrics_meta)
+    # Fill out statistics to be calculated by the postprocessor
+    # TODO: refactor to function
+    pp = EconomicRatioPostProcessor("statistics")
+    self._add_snippet(pp)
+    default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
+    stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
+    self._add_stats_to_postprocessor(pp, stats_names, econ_vars, case.stats_metrics_meta)
+    # Activity metrics with non-financial statistics
+    non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
+    self._add_stats_to_postprocessor(pp, non_fin_stat_names, activity_vars, case.stats_metrics_meta)
 
     # A MonteCarlo sampler is used to sample from the time series ROM. Capacity values will be added as constants
     # in the createWorkflow method.
     mc = MonteCarlo("mc")
+    mc.add_constant("scaling", 1.0)
+    self._add_snippet(mc)
 
     ###############
     # Steps Setup #
@@ -156,30 +177,39 @@ class DebugTemplate(RavenTemplate):
     multirun = self._template.find("Steps/MultiRun[@name='debug']")
     multirun.add_model(ensemble)
     multirun.add_sampler(mc)
-    # Add Function sources as Files
-    functions = self._get_function_files(sources)
-    for func in functions:
-      multirun.add_input(func)
+    # for func in functions:
+    #   multirun.add_input(func)
 
-    # # Add an EconomicRatio postprocessor and a postprocess step to summarize the econ results.
-    # arma_metrics = self._template.find("DataObjects/PointSet[@name='arma_metrics']")
-    # metrics_stats = self._template.find("DataObjects/PointSet[@name='metrics_stats']")
-    # pp_step = PostProcess("summarize")
-    # pp_step.add_input(arma_metrics)
-    # pp_step.add_model(pp)
-    # pp_step.add_output(metrics_stats)
-    # self._add_snippet(pp_step)
+    # Add an EconomicRatio postprocessor and a postprocess step to summarize the econ results.
+    arma_metrics = self._template.find("DataObjects/PointSet[@name='arma_metrics']")
+    metrics_stats = self._template.find("DataObjects/PointSet[@name='metrics_stats']")
+    pp_step = PostProcess("summarize")
+    pp_step.add_input(arma_metrics)
+    pp_step.add_model(pp)
+    pp_step.add_output(metrics_stats)
+    self._add_snippet(pp_step)
 
-    # # We need to be careful to add the "summarize" step after the "debug" MultiRun
-    # debug_idx = self._get_step_index(multirun)
-    # self._add_step_to_sequence(pp_step, index=debug_idx+1)
+    # We need to be careful to add the "summarize" step after the "debug" MultiRun
+    debug_idx = self._get_step_index(multirun)
+    self._add_step_to_sequence(pp_step, index=debug_idx+1)
 
     return mc
 
   def _use_static_csv(self, case: Case, components: list[Component], sources: list[Placeholder]) -> Sampler:
     raise NotImplementedError
 
-  def _update_debug_vargroups(self, components, sources):
+  def _update_vargroups(self, case, components, sources):
+    # Fill out capacities vargroup
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
+    capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"]))
+    capacities_vargroup.add_variables(*capacities_vars)
+
+    # Add time indices to GRO_time_indices
+    self._template.find("VariableGroups/Group[@name='GRO_time_indices']").add_variables(
+      case.get_time_name(),
+      case.get_year_name()
+    )
+
     # expected dispatch, ARMA outputs
     # -> dispatch results
     group = self._template.find("VariableGroups/Group[@name='GRO_outer_debug_dispatch']")
@@ -191,7 +221,7 @@ class DebugTemplate(RavenTemplate):
           var_name = self.namingTemplates['dispatch'].format(component=name, tracker=tracker, resource=resource)
           group.add_variables(var_name)
 
-    group = self._template.find("VariableGroups/Group[@name='GRO_outer_debug_cashflows']")
+    group = self._template.find("VariableGroups/Group[@name='GRO_cashflows']")
     cfs = self._find_cashflows(components)
     group.add_variables(*cfs)
 
@@ -202,13 +232,20 @@ class DebugTemplate(RavenTemplate):
         synths = source.get_variable()
         group.add_variables(*synths)
 
-  def _update_debug_dataobjects(self, case: Case) -> None:
+  def _update_dataset_indices(self, case: Case) -> None:
     # Configure dispatch DataSet indices
-    debug_gro = ['GRO_outer_debug_dispatch', 'GRO_outer_debug_synthetics']
-    dispatch = self._template.find("DataObjects/DataSet[@name='dispatch']")
-    dispatch.add_index(case.get_time_name(), debug_gro)
-    dispatch.add_index(case.get_year_name(), debug_gro)
-    dispatch.add_index(self.namingTemplates['cluster_index'], debug_gro)
+    time_name = case.get_time_name()
+    year_name = case.get_year_name()
+    cluster_name = self.namingTemplates["cluster_index"]
+
+    for time_index in self._template.findall(".//DataSet/Index[@var='Time']"):
+      time_index.set("var", time_name)
+
+    for year_index in self._template.findall(".//DataSet/Index[@var='Year']"):
+      year_index.set("var", year_name)
+
+    for cluster_index in self._template.findall(".//DataSet/Index[@var='_ROM_Cluster']"):
+      cluster_index.set("var", cluster_name)
 
   @staticmethod
   def _find_cashflows(components):

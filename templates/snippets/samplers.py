@@ -47,6 +47,8 @@ class Sampler(RavenSnippet):
   def _create_accessors(cls):
     super()._create_accessors()
     node_property(cls, "denoises", "constant[@name='denoises']")
+    node_property(cls, "sampler_init_seed", "samplerInit/initialSeed")
+    node_property(cls, "sampler_init_limit", "samplerInit/limit")
 
   def __init__(self, name: str) -> None:
     super().__init__(name)
@@ -71,6 +73,13 @@ class Grid(Sampler):
 
 class MonteCarlo(Sampler):
   tag = "MonteCarlo"
+
+  def __init__(self, name: str) -> None:
+    super().__init__(name)
+    if self.sampler_init_seed is None:
+      self.sampler_init_seed = 42
+    if self.sampler_init_limit is None:
+      self.sampler_init_limit = 3
 
 class Stratified(Sampler):
   tag = "Stratified"
