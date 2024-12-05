@@ -19,6 +19,7 @@ class Sequence(RavenSnippet):
     sequence = cls()
     if node.text:
       sequence._steps = [step.strip() for step in node.text.split(",")]
+      sequence.text = sequence._steps
     return sequence
 
   def add_step(self, step: Step | str, index: int | None = None) -> None:

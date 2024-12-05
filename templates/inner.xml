@@ -77,7 +77,7 @@
   </Databases>
 
   <Models>
-    <ExternalModel name='dispatch' subType='' ModuleToLoad='../../../../src/dispatch'>
+    <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
       <variables>GRO_dispatch, GRO_armasamples</variables>
     </ExternalModel>
 

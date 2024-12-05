@@ -255,6 +255,8 @@ class InnerTemplate(RavenTemplate):
     self._add_snippet(disp_results)
     write_metrics_stats.add_output(disp_results)
 
+    print(f"\n\n\n\nCreating inner workflow\n\n\n\n")
+
   def get_dispatch_results_name(self) -> str:
     """
     Gets the name of the Database or OutStream used to export the dispatch results to the outer workflow
