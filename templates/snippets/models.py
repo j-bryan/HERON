@@ -99,6 +99,7 @@ class EconomicRatioPostProcessor(Model):
   subtype = "EconomicRatio"
 
   def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
+    print("Adding statistic", tag, prefix, variable)
     ET.SubElement(self, tag, prefix=prefix, **kwargs).text = variable
 
 class ExternalModel(Model):
@@ -112,6 +113,8 @@ class ExternalModel(Model):
   def add_variable(self, *vars: str) -> None:
     self._variables.extend(vars)
     self.text = self._variables
+class HeronDispatchModel(ExternalModel):
+  subtype = "HERON.DispatchManager"
 
 class PickledROM(Model):
   tag = "ROM"

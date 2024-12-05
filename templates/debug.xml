@@ -1,0 +1,113 @@
+<Simulation verbosity='all'>
+  <RunInfo>
+    <JobName></JobName>
+    <WorkingDir>.</WorkingDir>
+    <Sequence>debug, debug_output</Sequence>  <!-- fill in with steps -->
+    <batchSize>1</batchSize>
+  </RunInfo>
+
+  <Steps>
+    <MultiRun name="debug">
+      <Input class='DataObjects' type='PointSet'>dispatch_placeholder</Input>
+      <Output class='DataObjects' type='DataSet'>arma_metrics</Output>
+      <Output class="DataObjects" type="DataSet">dispatch</Output>
+      <Output class="DataObjects" type="HistorySet">cashflows</Output>
+      <Output class="Databases" type="NetCDF">dispatch</Output>
+    </MultiRun>
+    <IOStep name="debug_output">
+      <Input class="DataObjects" type="DataSet">dispatch</Input>
+      <Input class="DataObjects" type="HistorySet">cashflows</Input>
+      <Output class="OutStreams" type="Print">dispatch_print</Output>
+      <Output class="OutStreams" type="Print">cashflows</Output>
+    </IOStep>
+  </Steps>
+
+  <VariableGroups>
+    <Group name="GRO_capacities"/>
+    <Group name="GRO_outer_results"/>
+    <Group name='GRO_outer_debug_dispatch'></Group>
+    <Group name='GRO_outer_debug_synthetics'></Group>
+    <Group name='GRO_outer_debug_cashflows'></Group>
+    <Group name='GRO_dispatch'>GRO_dispatch_in, GRO_dispatch_out, GRO_time_indices</Group>
+    <Group name='GRO_dispatch_in'>GRO_dispatch_in_scalar, GRO_dispatch_in_Time</Group>
+    <Group name='GRO_dispatch_out'/>
+    <Group name='GRO_dispatch_in_scalar' >GRO_capacities, scaling</Group>
+    <Group name='GRO_dispatch_in_Time'/>
+    <Group name='GRO_armasamples'>GRO_armasamples_in, GRO_armasamples_out</Group>
+    <Group name='GRO_armasamples_in'>GRO_armasamples_in_scalar</Group>
+    <Group name='GRO_armasamples_out'>GRO_armasamples_out_scalar</Group>
+    <Group name='GRO_armasamples_in_scalar'>scaling, GRO_capacities</Group>
+    <Group name='GRO_armasamples_out_scalar'/>
+    <Group name='GRO_final_return'/>
+    <Group name="GRO_full_dispatch"/>
+    <Group name="GRO_cashflows"/>
+    <Group name="GRO_full_dispatch_indices"/>
+    <Group name='GRO_interp'>stepwise</Group>
+    <Group name='GRO_capacities'/>
+    <Group name='GRO_init_disp'/>
+  </VariableGroups>
+
+  <DataObjects>
+    <DataSet name="dispatch_eval">
+      <Input>GRO_dispatch_in</Input>
+      <Index var="Time">GRO_dispatch_in_Time</Index>
+      <Index var="Year">GRO_dispatch_in_Time</Index>
+    </DataSet>
+    <PointSet name="dispatch_placeholder">
+      <Input>GRO_dispatch_in_scalar</Input>
+    </PointSet>
+    <DataSet name="dispatch">
+      <Input>scaling</Input>
+      <Output>GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</Output>
+    </DataSet>
+    <HistorySet name="cashflows">
+      <Output>GRO_outer_debug_cashflows</Output>
+      <Index var="cfYears">GRO_outer_debug_cashflows</Index>
+    </HistorySet>
+    <PointSet name="arma_metrics"/>
+    <PointSet name="metrics_stats"/>
+  </DataObjects>
+
+  <Databases>
+    <NetCDF name="dispatch" readMode="overwrite" directory="">
+      <variables>GRO_outer_debug_dispath, GRO_outer_debug_synthetics</variables>
+    </NetCDF>
+  </Databases>
+
+  <Models>
+    <!-- Code model is present for ALL bilevel outer workflows -->
+    <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
+      <variables>GRO_dispatch, GRO_armasamples</variables>
+    </ExternalModel>
+    <EnsembleModel name='sample_and_dispatch' subType=''>
+      <Model class='Models' type='ExternalModel'>dispatch
+        <Input class='DataObjects' type='PointSet'>dispatch_placeholder</Input>
+        <TargetEvaluation class='DataObjects' type='DataSet' >dispatch_eval</TargetEvaluation>
+      </Model>
+    </EnsembleModel>
+    <PostProcessor name="statistics" subType="EconomicRatio"/>
+    <!-- Add pickled time series ROMs -->
+  </Models>
+
+  <Samplers>
+  </Samplers>
+
+  <Files>
+    <!-- pickled ROM file -->
+  </Files>
+
+  <OutStreams>
+    <Print name="dispatch_print">
+      <type>csv</type>
+      <source>dispatch</source>
+    </Print>
+    <Print name="cashflows">
+      <type>csv</type>
+      <source>cashflows</source>
+    </Print>
+    <Print name='disp_debug'>
+      <type>csv</type>
+      <source>arma_samples</source>
+    </Print>
+  </OutStreams>
+</Simulation>

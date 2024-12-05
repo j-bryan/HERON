@@ -34,6 +34,14 @@ class Sequence(RavenSnippet):
 
     self.text = self._steps
 
+  def get_step_index(self, step: Step | str) -> int | None:
+    step_name = step.name if isinstance(step, Step) else str(step)
+    try:
+      idx = self._steps.index(step_name)
+    except ValueError:
+      idx = None
+    return idx
+
 class RunInfo(RavenSnippet):
   tag = "RunInfo"
 

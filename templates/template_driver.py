@@ -17,6 +17,7 @@ import dill as pk
 from .raven_template import RavenTemplate
 from .bilevel_templates import BilevelTemplate
 from .flat_templates import FlatMultiConfigTemplate, FlatMultiDispatchTemplate
+from .debug_template import DebugTemplate
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -45,7 +46,9 @@ class TemplateDriver(Base):
   ##############
   def create_workflow(self, case, components, sources) -> list[RavenTemplate]:
     # Flat or bilevel template?
-    if self._all_capacities_fixed(components) or case.debug["enabled"]:  # Can use flat inner
+    if case.debug["enabled"]:
+      self._template = DebugTemplate()
+    elif self._all_capacities_fixed(components):  # Can use flat inner
       self._template = FlatMultiConfigTemplate()
     elif self._uses_one_history(case, sources) and not self._has_uncertain_variable_costs(case, components, sources):  # Can use flat outer
       self._template = FlatMultiDispatchTemplate()

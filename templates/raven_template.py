@@ -18,7 +18,7 @@ from .snippets.runinfo import RunInfo
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
 from .snippets.samplers import Sampler, SampledVariable, Grid, Stratified, MonteCarlo, CustomSampler
 from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
-from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM
+from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM, EconomicRatioPostProcessor
 from .snippets.distributions import Distribution, Uniform
 from .snippets.outstreams import OutStream, PrintOutStream, OptPathPlot
 from .snippets.dataobjects import DataObject, PointSet, DataSet
@@ -363,6 +363,11 @@ class RavenTemplate(Template):
     sequence = find_node(self._template, "RunInfo/Sequence")
     sequence.add_step(step, index)
 
+  def _get_step_index(self, step: Step | str) -> int | None:
+    sequence = find_node(self._template, "RunInfo/Sequence")
+    idx = sequence.get_step_index(step)
+    return idx
+
   # Steps
   def _load_rom(self, source: Placeholder, rom: Model) -> IOStep:
     # Create the file input node
@@ -520,6 +525,69 @@ class RavenTemplate(Template):
       ET.SubElement(rom, "clusterEvalMode").text = "clustered"
     return rom
 
+  def _add_time_series_roms(self, case: Case, sources: list[Placeholder]):
+    """
+    Create and modify snippets based on sources
+    @ In, case, Case, HERON case
+    @ In, sources, list[Placeholder], case sources
+    @ Out, None
+    """
+    ensemble_model = self._template.find("Models/EnsembleModel[@name='sample_and_dispatch']")
+    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
+
+    # Add models, steps, and their requisite data objects and outstreams for each case source
+    arma_sources = (s for s in sources if s.is_type("ARMA"))
+    for source in arma_sources:
+      # An ARMA source is a pickled ROM that needs to be loaded.
+      # Define the model node
+      rom = self._pickled_rom_from_source(source)
+
+      # Create an IOStep to load the model
+      load_step = self._load_rom(source, rom)
+      self._add_step_to_sequence(load_step, index=0)
+
+      # Create an IOStep to print the ROM meta
+      print_meta_step = self._print_rom_meta(rom)
+      self._add_step_to_sequence(print_meta_step, index=1)
+
+      # Add loaded ROM to the EnsembleModel
+      inp_name = self.namingTemplates['data object'].format(source=source.name, contents='placeholder')
+      inp_do = PointSet(inp_name)
+      inp_do.add_inputs("scaling")
+      self._add_snippet(inp_do)
+
+      eval_name = self.namingTemplates['data object'].format(source=source.name, contents='samples')
+      eval_do = DataSet(eval_name)
+      eval_do.add_inputs("scaling")
+      out_vars = source.get_variable()
+      eval_do.add_outputs(out_vars)
+      eval_do.add_index(case.get_time_name(), out_vars)
+      eval_do.add_index(case.get_year_name(), out_vars)
+      if source.eval_mode == "clustered":
+        eval_do.add_index(self.namingTemplates['cluster_index'], out_vars)
+      self._add_snippet(eval_do)
+
+      # update variable group with ROM output variable names
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").add_variables(*out_vars)
+
+      rom_assemb = rom.to_assembler_node("Model")
+      inp_do_assemb = inp_do.to_assembler_node("Input")
+      eval_do_assemb = eval_do.to_assembler_node("TargetEvaluation")
+      rom_assemb.append(inp_do.to_assembler_node("Input"))
+      rom_assemb.append(eval_do.to_assembler_node("TargetEvaluation"))
+      ensemble_model.append(rom_assemb)
+
+      if source.eval_mode == "clustered":
+        vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
+        vg_dispatch.add_variables(self.namingTemplates["cluster_index"])
+        dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
+
+  @staticmethod
+  def _add_stats_to_postprocessor(pp: EconomicRatioPostProcessor, names: list[str], vars: list[str], meta: dict[str, dict]) -> None:
+    for var_name, stat_name in itertools.product(vars, names):
+      prefix = meta[stat_name]["prefix"]
+      pp.add_statistic(stat_name, prefix, var_name)
+
   # Distributions
   def _create_new_sampled_capacity(self, var_name, capacities):
     dist_name = self.namingTemplates["distribution"].format(variable=var_name)
@@ -675,11 +743,15 @@ class RavenTemplate(Template):
     return optimizer
 
   # Files
-  @staticmethod
-  def _file_from_source(source):
-    file = File(source.name)
-    file.text = source._target_file
-    return file
+  def _get_function_files(self, sources) -> list[File]:
+    # Add Function sources as Files
+    files = []
+    for function in [s for s in sources if s.is_type("Function")]:
+      file = File(function.name)
+      file.text = function._target_file
+      self._add_snippet(file)
+      files.append(file)
+    return files
 
   @staticmethod
   def _get_opt_metric_out_name(case):

@@ -65,9 +65,7 @@ class OuterTemplate(RavenTemplate):
     super().createWorkflow(case, components, sources)
 
     # Add Function sources as Files
-    for function in [s for s in sources if s.is_type("Function")]:
-      file = self._file_from_source(function)
-      self._add_snippet(file)
+    self._get_function_files(sources)
 
     # Create slave RAVEN model. This gets loaded from the template, since all bilevel workflows use this.
     raven = self._raven_model(case, components)
@@ -104,7 +102,7 @@ class OuterTemplate(RavenTemplate):
     @ In, case, Case, the HERON Case object
     @ Out, None
     """
-    case_name = case_name = self.namingTemplates['jobname'].format(case=case.name, io='o')
+    case_name = self.namingTemplates['jobname'].format(case=case.name, io='o')
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel
@@ -312,63 +310,6 @@ class InnerTemplate(RavenTemplate):
     for year_index in self._template.findall("DataObjects/DataSet/Index[@var='Year']"):
       year_index.set("var", year_name)
 
-  def _add_time_series_roms(self, case: Case, sources: list[Placeholder]):
-    """
-    Create and modify snippets based on sources
-    @ In, case, Case, HERON case
-    @ In, sources, list[Placeholder], case sources
-    @ Out, None
-    """
-    ensemble_model = self._template.find("Models/EnsembleModel[@name='sample_and_dispatch']")
-    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
-
-    # Add models, steps, and their requisite data objects and outstreams for each case source
-    arma_sources = (s for s in sources if s.is_type("ARMA"))
-    for source in arma_sources:
-      # An ARMA source is a pickled ROM that needs to be loaded.
-      # Define the model node
-      rom = self._pickled_rom_from_source(source)
-
-      # Create an IOStep to load the model
-      load_step = self._load_rom(source, rom)
-      self._add_step_to_sequence(load_step, index=0)
-
-      # Create an IOStep to print the ROM meta
-      print_meta_step = self._print_rom_meta(rom)
-      self._add_step_to_sequence(print_meta_step, index=1)
-
-      # Add loaded ROM to the EnsembleModel
-      inp_name = self.namingTemplates['data object'].format(source=source.name, contents='placeholder')
-      inp_do = PointSet(inp_name)
-      inp_do.add_inputs("scaling")
-      self._add_snippet(inp_do)
-
-      eval_name = self.namingTemplates['data object'].format(source=source.name, contents='samples')
-      eval_do = DataSet(eval_name)
-      eval_do.add_inputs("scaling")
-      out_vars = source.get_variable()
-      eval_do.add_outputs(out_vars)
-      eval_do.add_index(case.get_time_name(), out_vars)
-      eval_do.add_index(case.get_year_name(), out_vars)
-      if source.eval_mode == "clustered":
-        eval_do.add_index(self.namingTemplates['cluster_index'], out_vars)
-      self._add_snippet(eval_do)
-
-      # update variable group with ROM output variable names
-      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").add_variables(*out_vars)
-
-      rom_assemb = rom.to_assembler_node("Model")
-      inp_do_assemb = inp_do.to_assembler_node("Input")
-      eval_do_assemb = eval_do.to_assembler_node("TargetEvaluation")
-      rom_assemb.append(inp_do.to_assembler_node("Input"))
-      rom_assemb.append(eval_do.to_assembler_node("TargetEvaluation"))
-      ensemble_model.append(rom_assemb)
-
-      if source.eval_mode == "clustered":
-        vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
-        vg_dispatch.add_variables(self.namingTemplates["cluster_index"])
-        dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
-
   def _add_uncertain_cashflow_params(self, components) -> None:
     cf_attrs = ["_driver", "_alpha", "_reference", "_scale"]
 
@@ -403,9 +344,3 @@ class InnerTemplate(RavenTemplate):
         sampler_var = SampledVariable(feat_name)
         sampler_var.distribution = dist_snippet
         mc.add_variable(sampler_var)
-
-  @staticmethod
-  def _add_stats_to_postprocessor(pp: EconomicRatioPostProcessor, names: list[str], vars: list[str], meta: dict[str, dict]) -> None:
-    for var_name, stat_name in itertools.product(vars, names):
-      prefix = meta[stat_name]["prefix"]
-      pp.add_statistic(stat_name, prefix, var_name)
