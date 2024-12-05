@@ -329,8 +329,8 @@ class InnerTemplate(RavenTemplate):
 
         unit_name = f"{comp_name}_{cf.name}"
         feature_name = attr.rsplit("_", 1)[1]
-        dist_name = self.namingTemplates["distribution"].format(unit=unit_name, feature=feature_name)
         feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=feature_name)
+        dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
 
         dist_node = vp._vp.get_distribution() #ugh, this is NOT the XML... will have to reconstruct.
         dist_node.set("name", dist_name)

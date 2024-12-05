@@ -99,7 +99,6 @@ class EconomicRatioPostProcessor(Model):
   subtype = "EconomicRatio"
 
   def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
-    print("Adding statistic", tag, prefix, variable)
     ET.SubElement(self, tag, prefix=prefix, **kwargs).text = variable
 
 class ExternalModel(Model):

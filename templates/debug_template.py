@@ -65,8 +65,8 @@ class DebugTemplate(RavenTemplate):
     debug_iostep = self._template.find("Steps/IOStep[@name='debug_output']")
     if case.debug["dispatch_plot"]:
       disp_plot = HeronDispatchPlot("dispatchPlot")
-      dispatch = self._template.find("DataObjects/DataSet[@name='dispatch']")
-      disp_plot.source = dispatch
+      disp_full_dataset = self._template.find("DataObjects/DataSet[@name='disp_full']")
+      disp_plot.source = disp_full_dataset
       disp_plot.macro_variable = case.get_year_name()
       disp_plot.micro_variable = case.get_time_name()
 
@@ -118,8 +118,8 @@ class DebugTemplate(RavenTemplate):
     disp_placeholder = self._template.find("DataObjects/PointSet[@name='dispatch_placeholder']")
     disp_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
     dispatcher_assemb.append(disp_placeholder.to_assembler_node("Input"))
-    # for func in functions:
-    #   dispatcher_assemb.append(func.to_assembler_node("Input"))
+    for func in functions:
+      dispatcher_assemb.append(func.to_assembler_node("Input"))
     dispatcher_assemb.append(disp_eval.to_assembler_node("TargetEvaluation"))
     ensemble.append(dispatcher_assemb)
 
@@ -177,8 +177,8 @@ class DebugTemplate(RavenTemplate):
     multirun = self._template.find("Steps/MultiRun[@name='debug']")
     multirun.add_model(ensemble)
     multirun.add_sampler(mc)
-    # for func in functions:
-    #   multirun.add_input(func)
+    for func in functions:
+      multirun.add_input(func)
 
     # Add an EconomicRatio postprocessor and a postprocess step to summarize the econ results.
     arma_metrics = self._template.find("DataObjects/PointSet[@name='arma_metrics']")

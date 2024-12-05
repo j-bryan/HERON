@@ -10,18 +10,19 @@
     <MultiRun name="debug">
       <Input class='DataObjects' type='PointSet'>dispatch_placeholder</Input>
       <Output class='DataObjects' type='DataSet'>arma_metrics</Output>
-      <Output class="DataObjects" type="DataSet">dispatch</Output>
-      <Output class="DataObjects" type="HistorySet">cashflows</Output>
+      <Output class="DataObjects" type="DataSet">disp_full</Output>
+      <!-- <Output class="DataObjects" type="DataSet">dispatch</Output> -->
+      <!-- <Output class="DataObjects" type="HistorySet">cashflows</Output> -->
     </MultiRun>
     <IOStep name="debug_output">
-      <Input class="DataObjects" type="DataSet">dispatch</Input>
+      <Input class="DataObjects" type="DataSet">disp_full</Input>
       <Input class="DataObjects" type="HistorySet">cashflows</Input>
       <Output class="OutStreams" type="Print">dispatch_print</Output>
       <Output class="OutStreams" type="Print">cashflows</Output>
     </IOStep>
     <IOStep name="write_full">
-      <Input class="DataObjects" type="DataSet">dispatch</Input>
-      <Output class="Databases" type="NetCDF">dispatch</Output>
+      <Input class="DataObjects" type="DataSet">disp_full</Input>
+      <Output class="Databases" type="NetCDF">disp_full</Output>
     </IOStep>
   </Steps>
 
@@ -76,11 +77,18 @@
     <PointSet name="metrics_stats">
       <Output>GRO_final_return</Output>
     </PointSet>
+    <DataSet name="disp_full">
+      <Output>GRO_full_dispatch, GRO_dispatch, GRO_cashflows</Output>
+      <Index var="Time">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
+      <Index var="Year">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
+      <Index var="_ROM_Cluster">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
+      <Index var="cfYears">GRO_cashflows</Index>
+    </DataSet>
   </DataObjects>
 
   <Databases>
-    <NetCDF name="dispatch" readMode="overwrite" directory="">
-      <variables>GRO_outer_debug_dispath, GRO_outer_debug_synthetics</variables>
+    <NetCDF name="disp_full" readMode="overwrite" directory="">
+      <!-- <variables>GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</variables> -->
     </NetCDF>
   </Databases>
 
@@ -102,7 +110,7 @@
   <OutStreams>
     <Print name="dispatch_print">
       <type>csv</type>
-      <source>dispatch</source>
+      <source>disp_full</source>
     </Print>
     <Print name="cashflows">
       <type>csv</type>
