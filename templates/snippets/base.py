@@ -2,60 +2,7 @@ from typing import Any
 import inspect
 import xml.etree.ElementTree as ET
 
-from ..utils import find_node
-
-
-def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, default=None):
-  """
-  Creates a class property that gets/sets a child node text value
-  @ In, cls, ET.Element, the ET.Element class or a subclass of it
-  @ In, prop_name, str, property name
-  @ In, node_tag, str | None, optional, tag or path of the node the property is tied to (default=prop_name)
-  @ In, default, Any, optional, the default getter value
-  @ Out, None
-  """
-  if node_tag is None:
-    node_tag = prop_name
-
-  def getter(self):
-    node = self.find(node_tag)
-    return default if node is None else node.text
-
-  def setter(self, val):
-    find_node(self, node_tag).text = val
-
-  def deleter(self):
-    if (node := self.find(node_tag)) is not None:
-      self.remove(node)
-
-  doc = f"Accessor property for '{node_tag}' node text"
-  setattr(cls, prop_name, property(getter, setter, deleter, doc=doc))
-
-
-def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, default=None):
-  """
-  Creates a class property that gets/sets a node attribute value
-  @ In, cls, ET.Element, the ET.Element class or a subclass of it
-  @ In, prop_name, str, property name
-  @ In, attrib_name, str | None, optional, name of the node attribute the property is tied to (default=prop_name)
-  @ In, default, Any, optional, the default getter value
-  @ Out, None
-  """
-  if attrib_name is None:
-    attrib_name = prop_name
-
-  def getter(self):
-    return self.get(prop_name, default)
-
-  def setter(self, val):
-    self.set(prop_name, val)
-
-  def deleter(self):
-    self.attrib.pop(attrib_name, None)
-
-  doc = f"Accessor property for '{attrib_name}' node attribute"
-  setattr(cls, prop_name, property(getter, setter, deleter))
-
+from templates.utils import attrib_property
 
 class RavenSnippet(ET.Element):
   """
@@ -74,7 +21,6 @@ class RavenSnippet(ET.Element):
     @ Out, None
     """
     attrib_property(cls, "name")
-    attrib_property(cls, "subtype", "subType")
 
   def __init__(self,
                name: str | None = None,
@@ -93,7 +39,7 @@ class RavenSnippet(ET.Element):
     # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and provide
     # an easy interface to set the common attributes "name" and "subType".
     if name is not None:
-      self.attrib["name"] = name
+      self.name = name
     if self.subtype is not None:
       self.attrib["subType"] = self.subtype
     self.attrib.update(kwargs)

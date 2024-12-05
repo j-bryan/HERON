@@ -82,7 +82,7 @@ class RavenTemplate(Template):
                              'dispatch'       : 'Dispatch__{component}__{tracker}__{resource}',
                              'tot_activity'   : 'TotalActivity__{component}__{tracker}__{resource}',
                              'data object'    : '{source}_{contents}',
-                             'distribution'   : '{unit}_{feature}_dist',
+                             'distribution'   : '{variable}_dist',
                              'ARMA sampler'   : '{rom}_sampler',
                              'lib file'       : 'heron.lib', # TODO use case name?
                              'cashfname'      : '_{component}{cashname}',
@@ -161,15 +161,24 @@ class RavenTemplate(Template):
     @ In, snippet, RavenSnippet, the XML snippet to add
     @ In, parent, str | ET.Element | None, the parent node to add the snippet
     """
-    if not isinstance(snippet, RavenSnippet):
-      print("bad snippet:", snippet, type(snippet), snippet.tag)
-      raise ValueError
+    # if not isinstance(snippet, RavenSnippet):
+    #   raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
+    #                   "")
+    if isinstance(snippet, ET.Element) and not isinstance(snippet, RavenSnippet):
+      raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
+                      "Perhaps something went wrong when parsing the template XML, and the correct RavenSnippet "
+                      "suclass wasn't found?")
+    if snippet is None:
+      raise ValueError("Received None instead of a RavenSnippet object. Perhaps something went wrong when finding "
+                       "an XML node?")
 
     # If a parent node was provided, just append the snippet to its parent node.
     if isinstance(parent, ET.Element):
       parent.append(snippet)
       return
 
+    # Otherwise, figure out where to put the XML snippet. Either a string for a parent node (maybe doesn't exist yet)
+    # was provided, or the desired location is inferred from the snippet "snippet_class" (e.g. Models, DataObjects, etc.).
     if parent and isinstance(parent, str):
       parent_path = parent
     else:
@@ -207,10 +216,18 @@ class RavenTemplate(Template):
     results_data.add_outputs(results_vargroup)
     self._add_snippet(results_data)
 
-    # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
+    # Define grid sampler and build the variables and their distributions that it'll sample
     sampler = Grid("grid")
-    self._add_sampler_variables(sampler, case, components, sources)  # TODO
     self._add_snippet(sampler)
+    vars, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in vars.items():
+      sampler.add_variable(sampled_var)
+      sampled_var.use_grid(construction="custom", type="value", values=sorted(vals))
+    for var_name, val in consts.items():
+      sampler.add_constant(var_name, val)
+
+    # Number of "denoises" for the sampler is the number of samples it should take
+    sampler.denoises = case.get_num_samples()
 
     # Add case labels to the sampler
     self._add_labels(sampler, case)
@@ -225,6 +242,7 @@ class RavenTemplate(Template):
     for inp in inputs:
       multirun.add_input(inp)
     multirun.add_model(model)
+    multirun.add_sampler(sampler)
     multirun.add_output(results_data)
     multirun.add_output(print_results)
     self._add_snippet(multirun)
@@ -300,7 +318,7 @@ class RavenTemplate(Template):
     opt_path_plot.variables = ["GRO_capacities", objective]
     self._add_snippet(opt_path_plot)
 
-    plot_step = IOStep(f"plot_{opt_path_plot.name}")
+    plot_step = IOStep(f"plot")
     plot_step.add_input(solution_export)
     plot_step.add_output(opt_path_plot)
     self._add_snippet(plot_step)
@@ -347,16 +365,19 @@ class RavenTemplate(Template):
 
   # Steps
   def _load_rom(self, source: Placeholder, rom: Model) -> IOStep:
-    rom_name = source.name
-    rom_source = source._target_file
+    # Create the file input node
+    file = File(source.name)
+    file.text = source._target_file
 
     # create the IOStep
-    step_name = self.namingTemplates["stepname"].format(action="read", subject=rom_name)
+    step_name = self.namingTemplates["stepname"].format(action="read", subject=source.name)
     step = IOStep(step_name)
-    step.append(self._assemblerNode("Input", "Files", "", rom_source))
+    step.append(file.to_assembler_node("Input"))
     step.append(rom.to_assembler_node("Output"))
 
+    self._add_snippet(file)
     self._add_snippet(step)
+
     return step
 
   def _print_rom_meta(self, rom: Model) -> IOStep:
@@ -448,47 +469,6 @@ class RavenTemplate(Template):
           act_metrics.append(default_stats_tot_activity)
     return act_metrics
 
-  def _create_new_capacity_variable(self, comp_name: str, var_name: str, capacities: str, sampler: Sampler):
-    feature = "capacity" if "capacity" in var_name else "dispatch"
-
-    # Create distribution
-    dist_name = self.namingTemplates["distribution"].format(unit=comp_name, feature=feature)
-    dist = Uniform(dist_name)
-    dist.lower_bound = min(capacities)
-    dist.upper_bound = max(capacities)
-
-    # Create sampler variable
-    # FIXME: This could be made more flexible to accommodate all RAVEN samplers. However, only a subset of
-    #        RAVEN samplers are used at the moment (Grid, Stratified, MonteCarlo, Custom), so only these are
-    #        supported here.
-    sampler_var = SampledVariable(var_name)
-    if isinstance(sampler, (Grid, Stratified, MonteCarlo)):
-      sampler_var.distribution = dist
-    if isinstance(sampler, (Grid, Stratified)):
-      # TODO: where do these parameters come from?
-      sampler_var.set_sampling_strategy(construction="equal", type="CDF", steps=4, values=[0, 1])
-
-    # TODO: edit/add variable groups?_add_sampler_variables(sampler, case, components, sources)  # TODO
-
-    return dist, sampler_var
-
-  def _create_sampled_capacities(self, sampler: Sampler, distributions: ET.Element, components):
-    for component in components:
-      interaction = component.get_interaction()
-      comp_name = component.name
-      var_name = self.namingTemplates["variable"].format(unit=comp_name, feature="capacity")
-
-      cap = interaction.get_capacity(None, raw=True)
-      if not cap.is_parametric():
-        continue
-
-      vals = cap.get_value()  # debug mode not handled in this template!
-      if isinstance(vals, list):
-        # Create distribution and sampler variable nodes
-        dist, sampler_var = self._create_new_capacity_variable(comp_name, var_name, vals, sampler)
-        self._add_snippet(dist)
-        sampler.append(sampler_var)
-
   def _get_result_statistic_names(self, names: list[str], stats: list[str], case: Case):
     """
       Constructs the names of the statistics requested for output
@@ -536,52 +516,48 @@ class RavenTemplate(Template):
     if source.limit_interp is not None:
       rom.add_subelements(maxCycles=source.limit_interp)
     self._add_snippet(rom)
+    if source.eval_mode == 'clustered':
+      ET.SubElement(rom, "clusterEvalMode").text = "clustered"
     return rom
 
   # Distributions
-  def _create_uniform_variable(self, comp_name, var_name, capacities, sampler_type) -> tuple[Distribution, SampledVariable]:
-    feature = "capacity" if "capacity" in var_name else "dispatch"
-    dist_name = self.namingTemplates["distribution"].format(unit=comp_name, feature=feature)
-
-    # create distribution snippet for the variable
-    lower_bound = min(capacities)
-    upper_bound = max(capacities)
+  def _create_new_sampled_capacity(self, var_name, capacities):
+    dist_name = self.namingTemplates["distribution"].format(variable=var_name)
     dist = Uniform(dist_name)
-    dist.lower_bound = lower_bound
-    dist.upper_bound = upper_bound
+    min_cap = min(capacities)
+    max_cap = max(capacities)
+    dist.lower_bound = min_cap
+    dist.upper_bound = max_cap
+    self._add_snippet(dist)
 
-    # create variable for sampler, linked to the distribution
-    sampler_var = SampledVariable(var_name)
-    sampler_var.distribution = dist
+    sampled_var = SampledVariable(var_name)
+    sampled_var.distribution = dist
 
-    return dist, sampler_var
-
-    # # Set how the sampler will sample the variable. This is determined by the mode and sampler type.
-    # if sampler_type == "grid":  # just a grid sampler
-    #   caps = " ".join([str(x) for x in sorted(capacities)])
-    #   sampler_var.set_sampling_strategy(construction="custom", type="value", values=caps)
-    # elif sampler_type == "opt":  # any optimization mode
-    #   # initial value
-    #   delta = upper_bound - lower_bound
-    #   # start at 5% away from 0
-    #   if upper_bound > 0:
-    #     initial = lower_bound + 0.05 * delta
-    #   else:
-    #     initial = upper_bound - 0.05 * delta
-    #   sampler_var.initial = initial
+    return sampled_var
 
   # Samplers
-  def _add_sampler_variables(self, sampler: Sampler, case, components, sources):
-    # Add dispatch variables to sampler
+  def _create_sampler_variables(self, case, components) -> tuple[dict, dict]:
+    """
+    Create the Distribution and SampledVariable objects and the list of constant capacities that need to
+    be added to samplers and optimizers.
+    @ In, case, Case, HERON case
+    @ In, components, list[Component], HERON components
+    @ Out, sampled_variables, dict[SampledVariable, list[float]], variable objects for the sampler/optimizer
+    @ Out, constants, dict[str, float], constant variables
+    """
+    sampled_variables = {}
+    constants = {}
+
+    # Make Distribution and SampledVariable objects for sampling dispatch variables
     for key, value in case.dispatch_vars.items():
       var_name = self.namingTemplates["variable"].format(unit=key, feature="dispatch")
       vals = value.get_value(debug=case.debug["enabled"])  # FIXME refactor into separate debug mode
       if isinstance(vals, list):
-        dist, sampler_var = self._create_uniform_variable(key, var_name, vals, "opt")  # FIXME
-        self._add_snippet(dist)
-        sampler.add_variable(sampler_var)
+        sampled_var = self._create_new_sampled_capacity(var_name, vals)
+        sampled_variables[sampled_var] = vals
 
-    # Add component capacity variables
+    # Make Distribution and SampledVariable objects for capacity variables. Capacities with non-parametric
+    # ValuedParams are fixed values and are added instead as constants.
     for component in components:
       interaction = component.get_interaction()
       name = component.name
@@ -593,14 +569,12 @@ class RavenTemplate(Template):
 
       vals = cap.get_value(debug=case.debug["enabled"])  # FIXME: refactor debug mode into separate template
       if isinstance(vals, list):
-        dist, sampler_var = self._create_uniform_variable(name, var_name, vals, "opt")  # FIXME
-        self._add_snippet(dist)
-        if case.get_opt_strategy() == "BayesianOpt" and case.get_mode() == "opt" and not case.debug["enabled"]:  # TODO ugly
-          # sampler_var.remove(sampler_var.find("initial"))  # FIXME: no subtractive XML operations!
-          sampler_var.set_sampling_strategy(construction="equal", type="CDF", steps=10, values=[0, 1])
-        sampler.add_variable(sampler_var)
+        sampled_var = self._create_new_sampled_capacity(var_name, vals)
+        sampled_variables[sampled_var] = vals
       else:  # it's a constant
-        sampler.add_constant(var_name, vals)
+        constants[var_name] = vals
+
+    return sampled_variables, constants
 
   def _add_labels(self, sampler: Sampler, case: Case) -> None:
     """
@@ -620,52 +594,92 @@ class RavenTemplate(Template):
     for using Bayesian optimization.
     """
     # Create major XML blocks
-    optimizer = BayesianOptimizer("opt")
-    sampler = Stratified("lhs")
-    model = GaussianProcessRegressor("gpr")
+    optimizer = BayesianOptimizer("cap_opt")
+    sampler = Stratified("LHS_samp")
+    gpr = GaussianProcessRegressor("gpROM")
 
     # Add blocks to XML template
     self._add_snippet(optimizer)
     self._add_snippet(sampler)
-    self._add_snippet(model)
+    self._add_snippet(gpr)
 
     # Connect optimizer to sampler and ROM components
     optimizer.set_sampler(sampler)
-    optimizer.set_rom(model)
+    optimizer.set_rom(gpr)
 
     # Apply any specified optimization settings
-    opt_settings = case.get_optimization_settings()
+    opt_settings = case.get_optimization_settings() or {}  # default to empty dict if None
     optimizer.set_opt_settings(opt_settings)
     # Set GPR kernel if provided
-    if custom_kernel := opt_settings["algorithm"]["BayesianOpt"].get("kernel", None):
-      model.kernel = custom_kernel
+    if opt_settings and (custom_kernel := opt_settings["algorithm"]["BayesianOpt"].get("kernel", None)):
+      gpr.kernel = custom_kernel
 
     # Create sampler variables and their respective distributions
-    self._add_sampler_variables(sampler, case, components, sources)  # TODO
+    vars, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in vars.items():
+      sampled_var.use_grid(construction="grid", type="CDF", steps=10)
+      optimizer.add_variable(sampled_var)
+      sampler.add_variable(sampled_var)
+    for var_name, val in consts.items():
+      optimizer.add_constant(var_name, val)
 
     # Set number of denoises
-    # FIXME: same for all optimizers; refactor to be outside of BO method
-    denoises = ET.SubElement(optimizer, "constant", name="denoises")
-    denoises.text = case.get_num_samples()
+    optimizer.denoises = case.get_num_samples()
+
+    # Set GPR features list and target
+    features = []
+    for component in components:
+      name = component.name
+      interaction = component.get_interaction()
+      cap = interaction.get_capacity(None, raw=True)
+      if cap.is_parametric() and isinstance(cap.get_value(debug=case.debug['enabled']) , list):
+        features.append(self.namingTemplates["variable"].format(unit=name, feature="capacity"))
+    gpr.features = features
+    gpr.target = self._get_opt_metric_out_name(case)
 
     # Create sampler constants, variables, and their distributions
     distributions = self._template.find("Distributions")
-    self._create_sampled_capacities(sampler, distributions, components)
+    # TODO
 
     return optimizer
 
   def _create_gradient_descent(self, case, components, sources):
     # Create necessary XML blocks
-    optimizer = GradientDescent("opt")
+    optimizer = GradientDescent("cap_opt")
     self._add_snippet(optimizer)
 
     # Apply any specified optimization settings
     opt_settings = case.get_optimization_settings()
     optimizer.set_opt_settings(opt_settings)
-    objective, _ = case.get_opt_metric()
-    optimizer.objective = objective
+    optimizer.objective = self._get_opt_metric_out_name(case)
+
+    # Set number of denoises
+    optimizer.denoises = case.get_num_samples()
+
+    # Create sampler variables and their respective distributions
+    vars, consts = self._create_sampler_variables(case, components)
+
+    for sampled_var, vals in vars.items():
+      # initial value
+      min_val = min(vals)
+      max_val = max(vals)
+      delta = max_val - min_val
+      # start 5% away from zero
+      initial = min_val + 0.05 * delta if max_val > 0 else max_val - 0.05 * delta
+      sampled_var.initial = initial
+      optimizer.add_variable(sampled_var)
+
+    for var_name, val in consts.items():
+      optimizer.add_constant(var_name, val)
 
     return optimizer
+
+  # Files
+  @staticmethod
+  def _file_from_source(source):
+    file = File(source.name)
+    file.text = source._target_file
+    return file
 
   @staticmethod
   def _get_opt_metric_out_name(case):

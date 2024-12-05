@@ -1,20 +1,8 @@
 from typing import Any
-import os
-import sys
-import shutil
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet, node_property, attrib_property
-from .dataobjects import DataObject
-from .databases import Database
-
-# load utils
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-import HERON.src._utils as hutils
-sys.path.pop()
-
-# get raven location
-RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
+from ..utils import node_property
+from .base import RavenSnippet
 
 
 class Model(RavenSnippet):
@@ -34,20 +22,6 @@ class RavenCode(Model):
   def _create_accessors(cls):
     super()._create_accessors()
     node_property(cls, "executable")
-
-  def __init__(self, name: str):
-    super().__init__(name)
-    self._set_executable()
-
-  def _set_executable(self, path: str | None = None) -> None:
-    exec_path = path or os.path.abspath(os.path.join(RAVEN_LOC, "..", "raven_framework"))
-    if os.path.exists(exec_path):
-      executable = exec_path
-    elif shutil.which("raven_ravemework" is not None):
-      executable = "raven_framework"
-    else:
-      raise RuntimeError(f"raven_framework not in PATH and not at {exec_path}")
-    self.executable = executable
 
   def set_py_cmd(self, cmd: str) -> None:
     """
@@ -112,15 +86,13 @@ class GaussianProcessRegressor(Model):
   def __init__(self, name: str):
     # FIXME: Only custom_kernel setting exposed to HERON input
     super().__init__(name, self.default_settings)
-    self._features = []
-
-  def add_feature(self, feature: str):
-    self._features.append(feature)
-    self.features = self._features
 
 class EnsembleModel(Model):
   tag = "EnsembleModel"
-  subtype = ""
+
+  def __init__(self, name: str) -> None:
+    super().__init__(name)
+    self.attrib["subType"] = ""  # subType attribute must be present but must be empty
 
 class EconomicRatioPostProcessor(Model):
   tag = "PostProcessor"

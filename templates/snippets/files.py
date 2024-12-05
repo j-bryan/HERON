@@ -1,5 +1,7 @@
 import xml.etree.ElementTree as ET
-from .base import RavenSnippet, attrib_property
+
+from ..utils import attrib_property
+from .base import RavenSnippet
 
 
 class File(RavenSnippet):

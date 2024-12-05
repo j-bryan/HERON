@@ -21,6 +21,9 @@ from HERON.src.Components import Component
 from HERON.src.Placeholders import Placeholder
 sys.path.pop()
 
+# get raven location
+RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
+
 
 class BilevelTemplate(RavenTemplate):
   """ Coordinates information between inner and outer templates for bilevel workflows """
@@ -60,6 +63,11 @@ class OuterTemplate(RavenTemplate):
 
   def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
     super().createWorkflow(case, components, sources)
+
+    # Add Function sources as Files
+    for function in [s for s in sources if s.is_type("Function")]:
+      file = self._file_from_source(function)
+      self._add_snippet(file)
 
     # Create slave RAVEN model. This gets loaded from the template, since all bilevel workflows use this.
     raven = self._raven_model(case, components)
@@ -117,6 +125,16 @@ class OuterTemplate(RavenTemplate):
     Configures the inner RAVEN code. The bilevel outer template MUST have a <Code subType="RAVEN"> node defined.
     """
     raven = self._template.find("Models/Code[@subType='RAVEN']")
+
+    # Find the RAVEN executable to use
+    exec_path = os.path.abspath(os.path.join(RAVEN_LOC, "..", "raven_framework"))
+    if os.path.exists(exec_path):
+      executable = exec_path
+    elif shutil.which("raven_ravemework" is not None):
+      executable = "raven_framework"
+    else:
+      raise RuntimeError(f"raven_framework not in PATH and not at {exec_path}")
+    raven.executable = executable
 
     # custom python command for running raven (for example, "coverage run")
     if cmd := case.get_py_cmd_for_raven():
@@ -178,7 +196,6 @@ class InnerTemplate(RavenTemplate):
     dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
     self._template.find("VariableGroups/Group[@name='GRO_init_disp']").add_variables(*dispatch_vars)
     self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").add_variables(*dispatch_vars)
-    self._template.find("VariableGroups/Group[@name='GRO_capacities']").add_variables(*dispatch_vars)
 
     # Set time variable names
     #   - add time index names in all DataSet objects (replacing "Time", "Year" default names)
@@ -207,6 +224,10 @@ class InnerTemplate(RavenTemplate):
     #   - fill out econ post processor model
     #     - format: <statName prefix="{abbrev}">variable name</statName>; can have additional "percent" or "threshold" attrib
     #     - skip financial metrics (valueAtRisk, expectedShortfall, etc) for any TotalActivity* variable
+    vg_final_return = self._template.find("VariableGroups/Group[@name='GRO_final_return']")
+    results_vars = self._get_statistical_results_vars(case, components)
+    vg_final_return.add_variables(*results_vars)
+
     econ_pp = self._template.find("Models/PostProcessor[@name='statistics']")
     # Econ metrics with all statistics names
     # NOTE: This logic is borrowed from RavenTemplate._get_statistical_results_vars, but it's more useful to have the names,
@@ -232,6 +253,8 @@ class InnerTemplate(RavenTemplate):
       disp_results.source = metrics_stats
     else:  # default to NetCDF handling
       disp_results = NetCDF(self._dispatch_results_name)
+      disp_results.read_mode = "overwrite"
+    self._add_snippet(disp_results)
     write_metrics_stats.add_output(disp_results)
 
   def get_dispatch_results_name(self) -> str:
@@ -315,7 +338,6 @@ class InnerTemplate(RavenTemplate):
       self._add_step_to_sequence(print_meta_step, index=1)
 
       # Add loaded ROM to the EnsembleModel
-      # self._add_model_to_ensemble(rom, ensemble_model)
       inp_name = self.namingTemplates['data object'].format(source=source.name, contents='placeholder')
       inp_do = PointSet(inp_name)
       inp_do.add_inputs("scaling")
@@ -328,9 +350,16 @@ class InnerTemplate(RavenTemplate):
       eval_do.add_outputs(out_vars)
       eval_do.add_index(case.get_time_name(), out_vars)
       eval_do.add_index(case.get_year_name(), out_vars)
+      if source.eval_mode == "clustered":
+        eval_do.add_index(self.namingTemplates['cluster_index'], out_vars)
       self._add_snippet(eval_do)
 
+      # update variable group with ROM output variable names
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").add_variables(*out_vars)
+
       rom_assemb = rom.to_assembler_node("Model")
+      inp_do_assemb = inp_do.to_assembler_node("Input")
+      eval_do_assemb = eval_do.to_assembler_node("TargetEvaluation")
       rom_assemb.append(inp_do.to_assembler_node("Input"))
       rom_assemb.append(eval_do.to_assembler_node("TargetEvaluation"))
       ensemble_model.append(rom_assemb)
@@ -364,9 +393,7 @@ class InnerTemplate(RavenTemplate):
 
         dist_node = vp._vp.get_distribution() #ugh, this is NOT the XML... will have to reconstruct.
         dist_node.set("name", dist_name)
-        print(f"{dist_node=}")
         dist_snippet = snippet_factory.from_xml(dist_node)
-        print(f"{dist_snippet=}")
         self._add_snippet(dist_snippet)  # added to Distributions
 
         # Add uncertain parameter to econ UQ variable group
@@ -379,17 +406,6 @@ class InnerTemplate(RavenTemplate):
 
   @staticmethod
   def _add_stats_to_postprocessor(pp: EconomicRatioPostProcessor, names: list[str], vars: list[str], meta: dict[str, dict]) -> None:
-    # for stat_name, var_name in itertools.product(names, vars):
     for var_name, stat_name in itertools.product(vars, names):
-      stat_meta = meta[stat_name]
-      prefix = stat_meta["prefix"]
-      stat_attribs = {k: stat_meta[k] for k in stat_meta.keys() & {"percent", "threshold"}}
-
-      for k, v in stat_attribs.items():
-        if isinstance(v, list):
-          for vi in v:
-            pp.add_statistic(stat_name, prefix, var_name, **{k: vi})
-        else:
-            pp.add_statistic(stat_name, prefix, var_name, **{k: v})
-      else:
-        pp.add_statistic(stat_name, prefix, var_name)
+      prefix = meta[stat_name]["prefix"]
+      pp.add_statistic(stat_name, prefix, var_name)

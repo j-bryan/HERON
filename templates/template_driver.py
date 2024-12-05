@@ -759,14 +759,14 @@ class Template(TemplateBase, Base):
     if case.get_mode() == 'opt'and (not case.debug['enabled']):
       # Strategy tells us which optimizer to use
       if strategy == 'BayesianOpt':
-        opt_node = template.find('Optimizers').find(".//BayesianOptimizer[@name='cap_opt']")
-        template.find('Optimizers').remove(template.find(".//GradientDescent[@name='cap_opt']"))
+        opt_node = template.find('Optimizers').find(".//BayesianOptimizer[@name='opt']")
+        template.find('Optimizers').remove(template.find(".//GradientDescent[@name='opt']"))
       # Its either BO or GD
       else:
-        opt_node = template.find('Optimizers').find(".//GradientDescent[@name='cap_opt']")
+        opt_node = template.find('Optimizers').find(".//GradientDescent[@name='opt']")
         template.remove(template.find('Samplers'))
         template.find('Models').remove(template.find(".//ROM[@name='gpROM']"))
-        template.find('Optimizers').remove(template.find(".//BayesianOptimizer[@name='cap_opt']"))
+        template.find('Optimizers').remove(template.find(".//BayesianOptimizer[@name='opt']"))
     # if running in debug, none of these nodes should be here, skip
     if case.debug['enabled']:
       return

@@ -1,6 +1,5 @@
-import xml.etree.ElementTree as ET
-
-from .base import RavenSnippet, node_property, attrib_property
+from ..utils import attrib_property
+from .base import RavenSnippet
 
 
 class Database(RavenSnippet):
@@ -9,7 +8,7 @@ class Database(RavenSnippet):
   @classmethod
   def _create_accessors(cls):
     super()._create_accessors()
-    attrib_property(cls, "read_mode")
+    attrib_property(cls, "read_mode", "readMode")
     attrib_property(cls, "directory")
     attrib_property(cls, "filename")
 
@@ -42,8 +41,7 @@ class Database(RavenSnippet):
   # Getters & Setters #
   #####################
   def add_variable(self, *vars: str):
-    for v in vars:
-      self.variables.add(v)
+    self.variables.update(vars)
 
 
 class NetCDF(Database):

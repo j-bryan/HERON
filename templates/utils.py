@@ -135,7 +135,7 @@ def parse_xpath(xpath: str):
   """
   # Regular expression to match node with optional attributes
   # Regex for XPaths created using AiVA
-  node_pattern = re.compile(r'(?P<tag>[^/\[]+)(\[@(?P<attrib>[^=]+)="(?P<value>[^"]+)"\])?')
+  node_pattern = re.compile(r"(?P<tag>[^/\[]+)(\[@(?P<attrib>[^=]+)=(?P<quote>['\"])(?P<value>[^'\"]+)(?P=quote)\])?")
 
   nodes = []
   for match in node_pattern.finditer(xpath.strip('/')):
@@ -235,3 +235,55 @@ def get_node_index(parent: ET.Element, child: ET.Element) -> int | None:
     if child == sub:
       return i
   return None
+
+
+def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, default=None):
+  """
+  Creates a class property that gets/sets a child node text value
+  @ In, cls, ET.Element, the ET.Element class or a subclass of it
+  @ In, prop_name, str, property name
+  @ In, node_tag, str | None, optional, tag or path of the node the property is tied to (default=prop_name)
+  @ In, default, Any, optional, the default getter value
+  @ Out, None
+  """
+  if node_tag is None:
+    node_tag = prop_name
+
+  def getter(self):
+    node = self.find(node_tag)
+    return default if node is None else node.text
+
+  def setter(self, val):
+    find_node(self, node_tag).text = val
+
+  def deleter(self):
+    if (node := self.find(node_tag)) is not None:
+      self.remove(node)
+
+  doc = f"Accessor property for '{node_tag}' node text"
+  setattr(cls, prop_name, property(getter, setter, deleter, doc=doc))
+
+
+def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, default=None):
+  """
+  Creates a class property that gets/sets a node attribute value
+  @ In, cls, ET.Element, the ET.Element class or a subclass of it
+  @ In, prop_name, str, property name
+  @ In, attrib_name, str | None, optional, name of the node attribute the property is tied to (default=prop_name)
+  @ In, default, Any, optional, the default getter value
+  @ Out, None
+  """
+  if attrib_name is None:
+    attrib_name = prop_name
+
+  def getter(self):
+    return self.get(attrib_name, default)
+
+  def setter(self, val):
+    self.set(attrib_name, val)
+
+  def deleter(self):
+    self.attrib.pop(attrib_name, None)
+
+  doc = f"Accessor property for '{attrib_name}' node attribute"
+  setattr(cls, prop_name, property(getter, setter, deleter))

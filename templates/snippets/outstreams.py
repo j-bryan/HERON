@@ -9,7 +9,9 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet, node_property
+from ..utils import node_property
+
+from .base import RavenSnippet
 from .dataobjects import DataObject
 
 

@@ -15,7 +15,7 @@ def modifyInput(root: ET.Element, mod_dict: dict) -> ET.Element:
 
   # Set sampler limit to the number of denoises
   denoises = mod_dict["Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises"]
-  mc.find('samplerInit/limit').text = denoises
+  mc.find('samplerInit/limit').text = str(denoises)
 
   # Set the component capacities as constants in the sampler
   pattern = r"(?<=@name:)\w+(?=_capacity)"  # regex pattern for "*@name:{comp_name}_capcity*"
@@ -23,6 +23,6 @@ def modifyInput(root: ET.Element, mod_dict: dict) -> ET.Element:
     if match := re.search(pattern, k):
       comp = match.group()
       const = mc.find(f"constant[@name='{comp}_capacity']")
-      const.text = mod_dict[f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{comp}_capacity"]
+      const.text = str(mod_dict[f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{comp}_capacity"])
 
   return root

@@ -7,8 +7,8 @@ Optimization features
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..utils import find_node
-from .base import RavenSnippet, node_property
+from ..utils import find_node, node_property
+from .base import RavenSnippet
 from .samplers import Sampler
 from .models import Model
 from .dataobjects import DataObject
@@ -93,7 +93,10 @@ class BayesianOptimizer(Optimizer):
   def set_opt_settings(self, opt_settings):
     super().set_opt_settings(opt_settings)
 
-    bo_settings = opt_settings["algorithm"]["BayesianOpt"]
+    try:
+      bo_settings = opt_settings["algorithm"]["BayesianOpt"]
+    except KeyError:  # use defaults
+      bo_settings = {}
 
     # acquisition function
     acquisition = self.find("Acquisition")
@@ -127,8 +130,8 @@ class BayesianOptimizer(Optimizer):
     sampler_node.text = assemb_node.text
 
   def set_rom(self, rom: Model) -> None:
-    model_node = find_node(self, "Model")
-    assemb_node = rom.to_assembler_node("Model")
+    model_node = find_node(self, "ROM")
+    assemb_node = rom.to_assembler_node("ROM")
     model_node.attrib = assemb_node.attrib
     model_node.text = assemb_node.text
 class ExpectedImprovement(RavenSnippet):
@@ -164,8 +167,7 @@ class LowerConfidenceBound(RavenSnippet):
   default_settings = {
     "optimizationMethod": "differentialEvolution",
     "seedingCount": 30,
-    "epsilon": 1,
-    "rho": 20,
+    "pi": 0.98,
     "transient": "Constant"
   }
 
@@ -182,6 +184,11 @@ class GradientDescent(Optimizer):
   tag = "GradientDescent"
 
   default_settings = {
+    "samplerInit": {
+      "limit": 800,
+      "type": "max",
+      "writeSteps": "every"
+    },
     "gradient": {  # CentralDifference, SPSA not exposed in HERON input
       "FiniteDifference": ""  # gradDistanceScalar option not exposed
     },

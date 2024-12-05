@@ -1,7 +1,9 @@
 import keyword
 import re
 
-from .base import RavenSnippet, node_property
+from ..utils import node_property
+
+from .base import RavenSnippet
 
 
 class Distribution(RavenSnippet):

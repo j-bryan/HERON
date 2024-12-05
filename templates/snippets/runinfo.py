@@ -1,8 +1,8 @@
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet, node_property
+from .base import RavenSnippet
 from .steps import Step
-from ..utils import find_node
+from ..utils import find_node, node_property
 
 
 class Sequence(RavenSnippet):

@@ -7,10 +7,10 @@ Sampler features
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..utils import _to_string
+from ..utils import _to_string, node_property
 
 from ..utils import find_node
-from .base import RavenSnippet, node_property
+from .base import RavenSnippet
 from .distributions import Distribution
 
 
@@ -28,7 +28,7 @@ class SampledVariable(RavenSnippet):
   def __init__(self, name: str) -> None:
     super().__init__(name)
 
-  def set_sampling_strategy(self, construction="equal", type="CDF", steps: int | None = None, values: list[float] = [0, 1]) -> None:
+  def use_grid(self, construction="equal", type="CDF", steps: int | None = None, values: list[float] = [0, 1]) -> None:
     if type == "CDF" and not all([0 <= val <= 1 for val in values]):
       raise ValueError(f"All CDF values must lie on the interval [0, 1]. Values received: {values}.")
 
@@ -42,6 +42,11 @@ class SampledVariable(RavenSnippet):
 
 class Sampler(RavenSnippet):
   snippet_class = "Samplers"
+
+  @classmethod
+  def _create_accessors(cls):
+    super()._create_accessors()
+    node_property(cls, "denoises", "constant[@name='denoises']")
 
   def __init__(self, name: str) -> None:
     super().__init__(name)
@@ -63,20 +68,6 @@ class Sampler(RavenSnippet):
 
 class Grid(Sampler):
   tag = "Grid"
-
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "denoises", "constant[@name='denoises']")
-
-  def __init__(self, name: str):
-    super().__init__("Grid", name)
-    # Grid sampler denoises defaults to 1
-    # FIXME: Do ALL Grid samplers need the denoises variable?
-    self.denoises = 1
-
-  def add_variable(self, variable: SampledVariable):
-    pass
 
 class MonteCarlo(Sampler):
   tag = "MonteCarlo"
