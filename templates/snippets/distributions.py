@@ -2,8 +2,30 @@ import keyword
 import re
 
 from ..utils import node_property
-
 from .base import RavenSnippet
+
+import sys
+import os
+
+# load utils
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+import HERON.src._utils as hutils
+sys.path.pop()
+
+RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
+
+sys.path.append(os.path.join(RAVEN_LOC, '..'))
+from ravenframework.utils import xmlUtils
+from ravenframework.InputTemplates.TemplateBaseClass import Template
+from ravenframework.utils import InputTypes
+sys.path.pop()
+
+raven_types = {
+  InputTypes.IntegerType: int,
+  InputTypes.FloatType: float,
+  InputTypes.StringType: str,
+  InputTypes.BoolType: bool
+}
 
 
 class Distribution(RavenSnippet):
@@ -32,20 +54,20 @@ def distribution_class_from_spec(spec):
   @ Out, distribution, NewDistribution, the new distribution class
   """
   dist_name = spec.getName()
-  subnodes = [sub.getName() for sub in spec.subs]
 
   class NewDistribution(Distribution):
-    pass
+    tag = dist_name
 
-  NewDistribution.tag = dist_name
-
-  for subnode_tag in subnodes:
+  for subnode in spec.subs:
+    subnode_tag = subnode.getName()
     prop_name = camel_to_snake(subnode_tag)
     # can't use name if it's in keywords.kwlist (reserved keywords), so add a trailing underscore to the name
     if prop_name in keyword.kwlist:
       prop_name += "_"
+    prop_type = raven_types.get(subnode.contentType, str)
+    default = None if subnode.default == "no-default" else subnode.default
     # Create a property to set the distribution parameters as "distribution.prop_name = value". We don't really
     # need to do this, but it gives us a nice interface.
-    node_property(NewDistribution, prop_name, subnode_tag)
+    node_property(NewDistribution, prop_name, subnode_tag, default=default, prop_type=prop_type)
 
   return NewDistribution

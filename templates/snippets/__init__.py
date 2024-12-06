@@ -6,7 +6,7 @@ from .files import File
 from .models import EnsembleModel, ExternalModel, GaussianProcessRegressor, PickledROM, RavenCode
 from .optimizers import GradientDescent, BayesianOptimizer
 from .outstreams import HeronDispatchPlot, PrintOutStream, TealCashFlowPlot
-from .runinfo import RunInfo
+from .runinfo import RunInfo, Sequence
 from .samplers import CustomSampler, Grid, MonteCarlo, Stratified
 from .steps import IOStep, MultiRun, PostProcess
 from .variablegroups import VariableGroup

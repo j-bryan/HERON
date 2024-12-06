@@ -247,13 +247,14 @@ def get_node_index(parent: ET.Element, child: ET.Element) -> int | None:
   return None
 
 
-def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, default=None):
+def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, *, default=None, prop_type=None):
   """
   Creates a class property that gets/sets a child node text value
   @ In, cls, ET.Element, the ET.Element class or a subclass of it
   @ In, prop_name, str, property name
   @ In, node_tag, str | None, optional, tag or path of the node the property is tied to (default=prop_name)
   @ In, default, Any, optional, the default getter value
+  @ In, prop_type, type, type of property value
   @ Out, None
   """
   if node_tag is None:
@@ -261,9 +262,14 @@ def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, 
 
   def getter(self):
     node = self.find(node_tag)
-    return default if node is None else node.text
+    if node is None:
+      return default
+    val = node.text
+    val = val if prop_type is None else prop_type(val)
+    return val
 
   def setter(self, val):
+    val = val if prop_type is None else prop_type(val)
     find_node(self, node_tag).text = val
 
   def deleter(self):
@@ -274,22 +280,27 @@ def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, 
   setattr(cls, prop_name, property(getter, setter, deleter, doc=doc))
 
 
-def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, default=None):
+def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, *, default=None, prop_type=None):
   """
   Creates a class property that gets/sets a node attribute value
   @ In, cls, ET.Element, the ET.Element class or a subclass of it
   @ In, prop_name, str, property name
   @ In, attrib_name, str | None, optional, name of the node attribute the property is tied to (default=prop_name)
   @ In, default, Any, optional, the default getter value
+  @ In, prop_type, type, type of property value
   @ Out, None
   """
   if attrib_name is None:
     attrib_name = prop_name
 
   def getter(self):
-    return self.get(attrib_name, default)
+    val = self.get(attrib_name, default)
+    if val is not None and prop_type is not None:
+      val = prop_type(val)
+    return val
 
   def setter(self, val):
+    val = val if prop_type is None else prop_type(val)
     self.set(attrib_name, val)
 
   def deleter(self):

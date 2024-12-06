@@ -1,4 +1,3 @@
-import bisect
 import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet
@@ -22,5 +21,8 @@ class VariableGroup(RavenSnippet):
     return vargroup
 
   def add_variables(self, *vars: str) -> None:
-    self._variables.extend(vars)
+    if len(vars) == 1 and isinstance(vars[0], list):
+      vars = vars[0]
+    new_vars = [v for v in vars if v not in self._variables]
+    self._variables.extend(new_vars)
     self.text = self._variables
