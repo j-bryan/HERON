@@ -299,9 +299,8 @@ class Template(TemplateBase, Base):
     # parallel
     if case.outerParallel:
       # set outer batchsize and InternalParallel
-      batchSize = run_info.find('batchSize')
-      batchSize.text = f'{case.outerParallel}'
-      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
+      run_info.batch_size = case.outerParallel
+      run_info.internal_parallel = True
     if case.useParallel:
       #XXX this doesn't handle non-mpi modes like torque or other custom ones
       mode = xmlUtils.newNode('mode', text='mpi')

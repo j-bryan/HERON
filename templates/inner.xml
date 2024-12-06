@@ -2,7 +2,7 @@
   <RunInfo>
     <JobName></JobName>
     <WorkingDir>.</WorkingDir>
-    <Sequence>arma_sampling, summarize, write_metrics_stats</Sequence>
+    <Sequence>arma_sampling, summarize, database</Sequence>
     <batchSize>1</batchSize>
   </RunInfo>
 
@@ -18,7 +18,7 @@
       <Model class='Models' type='PostProcessor'>statistics</Model>
       <Output class='DataObjects' type='PointSet'>metrics_stats</Output>
     </PostProcess>
-    <IOStep name="write_metrics_stats">
+    <IOStep name="database">
       <Input class='DataObjects' type='PointSet'>metrics_stats</Input>
     </IOStep>
   </Steps>
@@ -54,13 +54,6 @@
     <PointSet name="metrics_stats">
       <Output>GRO_final_return</Output>
     </PointSet>
-    <DataSet name="disp_full">
-      <Output>GRO_full_dispatch, GRO_dispatch, GRO_cashflows</Output>
-      <Index var="Time">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="Year">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="_ROM_Cluster">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="cfYears">GRO_cashflows</Index>
-    </DataSet>
     <DataSet name="dispatch_eval">
       <Input>GRO_dispatch_in</Input>
       <Index var="Time">GRO_dispatch_in_Time</Index>
@@ -70,11 +63,6 @@
       <Input>GRO_dispatch_in_scalar</Input>
     </PointSet>
   </DataObjects>
-
-  <Databases>
-    <NetCDF name="disp_results" readMode="overwrite" directory=""/>
-    <NetCDF name="disp_full" readMode="overwrite" directory=""/>
-  </Databases>
 
   <Models>
     <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
@@ -101,10 +89,6 @@
 
   <Samplers>
     <MonteCarlo name='mc_arma_dispatch'>
-      <samplerInit>
-        <initialSeed>42</initialSeed>
-        <limit>3</limit>
-      </samplerInit>
       <constant name='scaling'>1.0</constant>
     </MonteCarlo>
   </Samplers>

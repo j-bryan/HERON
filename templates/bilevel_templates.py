@@ -10,7 +10,7 @@ from .snippets.databases import NetCDF
 from .snippets.dataobjects import DataSet, PointSet
 from .snippets.models import RavenCode, EconomicRatioPostProcessor
 from .snippets.outstreams import PrintOutStream
-from .snippets.samplers import SampledVariable
+from .snippets.samplers import SampledVariable, Sampler
 
 from .utils import get_capacity_vars, get_component_activity_vars
 
@@ -92,6 +92,11 @@ class OuterTemplate(RavenTemplate):
       # else block in the case mode check control flow above.
       raise ValueError(f"Case mode '{case.get_mode()}' is not supported for OuterTemplate templates.")
 
+    # Update the parallel settings based on the number of sampled variables if the number of outer parallel runs
+    # was not specified before.
+    if case.outerParallel == 0 and case.useParallel:
+      self._update_batch_size(case)
+
   def set_inner_data_name(self, name: str, inner_to_outer: str) -> None:
     model = self._template.find("Models/Code[@subType='RAVEN']")
     model.set_inner_data_handling(name, inner_to_outer)
@@ -147,6 +152,21 @@ class OuterTemplate(RavenTemplate):
       raven.add_alias(label, suffix="label")
 
     return raven
+
+  def _update_batch_size(self, case: Case) -> None:
+    if case.get_mode() == "sweep":
+      sampler = self._template.find("Samplers/Grid")
+    elif case.get_opt_strategy() == "BayesianOpt":
+      sampler = self._template.find("Optimizers/BayesianOptimizer")
+    elif case.get_opt_strategy() == "GradientDescent":
+      sampler = self._template.find("Optimizers/GradientDescent")
+    else:
+      raise ValueError("Sampler not found")
+
+    run_info = self._template.find("RunInfo")
+    case.outerParallel = sampler.num_sampled_vars + 1
+    run_info.batch_size = case.outerParallel
+    run_info.internal_parallel = True
 
 class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
@@ -242,8 +262,7 @@ class InnerTemplate(RavenTemplate):
     # Work out how the inner results should be routed back to the outer
     #    - database or csv
     metrics_stats = self._template.find("DataObjects/PointSet[@name='metrics_stats']")
-    step_name = self.namingTemplates["stepname"].format(action="write", subject=metrics_stats.name)
-    write_metrics_stats = self._template.find(f"Steps/IOStep[@name='{step_name}']")
+    write_metrics_stats = self._template.find(f"Steps/IOStep[@name='database']")
     self._dispatch_results_name = "disp_results"
     data_handling = case.data_handling["inner_to_outer"]
     if data_handling == "csv":

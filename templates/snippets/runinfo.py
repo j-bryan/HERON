@@ -57,7 +57,7 @@ class RunInfo(RavenSnippet):
     node_property(cls, "job_name", "JobName", default="")
     node_property(cls, "working_dir", "WorkingDir", default="")
     node_property(cls, "batch_size", "batchSize", default=1)
-    node_property(cls, "internal_parallel", "InternalParallel", default=False)
+    node_property(cls, "internal_parallel", "internalParallel", default=False)
     node_property(cls, "num_mpi", "NumMPI")
 
   @classmethod

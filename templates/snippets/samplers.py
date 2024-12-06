@@ -76,10 +76,8 @@ class MonteCarlo(Sampler):
 
   def __init__(self, name: str) -> None:
     super().__init__(name)
-    if self.sampler_init_seed is None:
-      self.sampler_init_seed = 42
-    if self.sampler_init_limit is None:
-      self.sampler_init_limit = 3
+    self.sampler_init_seed = 42
+    self.sampler_init_limit = 3
 
 class Stratified(Sampler):
   tag = "Stratified"
