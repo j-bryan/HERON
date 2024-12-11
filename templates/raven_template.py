@@ -375,7 +375,7 @@ class RavenTemplate(Template):
   def _load_rom(self, source: Placeholder, rom: RavenSnippet) -> IOStep:
     # Create the file input node
     file = File(source.name)
-    file.path = source._source
+    file.path = source._target_file
 
     # create the IOStep
     step_name = self.namingTemplates["stepname"].format(action="read", subject=source.name)
