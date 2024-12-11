@@ -1,32 +1,30 @@
 import xml.etree.ElementTree as ET
 
-from .base import RavenSnippet
-from .variablegroups import VariableGroup
-
 from ..utils import find_node
+from ..decorators import listproperty
+from .base import RavenSnippet
 
 
 class DataObject(RavenSnippet):
   snippet_class = "DataObjects"
 
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    self._inputs = []
-    self._outputs = []
+  @listproperty
+  def inputs(self) -> list[str]:
+    node = self.find("Input")
+    return getattr(node, "text", []) or []
 
-  def add_inputs(self, *inputs: str | VariableGroup) -> None:
-    if isinstance(inputs[0], list) and len(inputs) == 1:
-      # A list got passed in instead of many positional arguments (no star used)
-      inputs = inputs[0]
-    self._inputs.extend(inputs)
-    find_node(self, "Input").text = self._inputs
+  @inputs.setter
+  def inputs(self, value: list[str]) -> None:
+    find_node(self, "Input").text = value
 
-  def add_outputs(self, *outputs: str | VariableGroup) -> None:
-    if isinstance(outputs[0], list) and len(outputs) == 1:
-      # A list got passed in instead of many positional arguments (no star used)
-      outputs = outputs[0]
-    self._outputs.extend(outputs)
-    find_node(self, "Output").text = self._outputs
+  @listproperty
+  def outputs(self) -> list[str]:
+    node = self.find("Output")
+    return getattr(node, "text", []) or []
+
+  @outputs.setter
+  def outputs(self, value: list[str]) -> None:
+    find_node(self, "Output").text = value
 
 
 class PointSet(DataObject):
@@ -41,5 +39,4 @@ class DataSet(DataObject):
   tag = "DataSet"
 
   def add_index(self, index_var: str, variables: str | list[str]) -> None:
-    index = ET.SubElement(self, "Index", {"var": index_var})
-    index.text = variables
+    ET.SubElement(self, "Index", {"var": index_var}).text = variables

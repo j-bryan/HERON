@@ -9,53 +9,86 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..utils import node_property
-
+from ..utils import find_node
+from ..decorators import listproperty
 from .base import RavenSnippet
-from .dataobjects import DataObject
 
 
 class OutStream(RavenSnippet):
   snippet_class = "OutStreams"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "source")
+  @property
+  def source(self) -> str | None:
+    node = self.find("source")
+    return None if node is None else node.text
 
-  def __init__(self, name: str):
-    super().__init__(name)
+  @source.setter
+  def source(self, value: str) -> None:
+    find_node(self, "source").text = value
 
 class PrintOutStream(OutStream):
   tag = "Print"
 
-  def __init__(self, name: str) -> None:
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "PrintOutStream":
+    outstream = cls(node.get("name"))
+    outstream.attrib.update(node.attrib)
+    for sub in node:
+      if sub.tag == "type":
+        continue
+      outstream.append(sub)
+    return outstream
+
+  def __init__(self, name: str | None = None) -> None:
     super().__init__(name)
-    ET.SubElement(self, "type").text = "csv"
+    ET.SubElement(self, "type").text = "csv"  # The only supported output file type
 
   def add_parameter(self, name: str, value: Any) -> None:
-    node = ET.SubElement(self, name)
-    node.text = value
+    ET.SubElement(self, name).text = value
 
 class OptPathPlot(OutStream):
   tag = "Plot"
   subtype = "OptPath"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "variables", "vars")
+  @listproperty
+  def variables(self) -> list[str]:
+    node = self.find("vars")
+    return getattr(node, "text", []) or []
+
+  @variables.setter
+  def variables(self, value: list[str]) -> None:
+    find_node(self, "vars").text = value
 
 class HeronDispatchPlot(OutStream):
   tag = "Plot"
   subtype = "HERON.DispatchPlot"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "macro_variable")
-    node_property(cls, "micro_variable")
-    node_property(cls, "signals")
+  @property
+  def macro_variable(self) -> str | None:
+    node = self.find("macro_variable")
+    return None if node is None else node.text
+
+  @macro_variable.setter
+  def macro_variable(self, value: str) -> None:
+    find_node(self, "macro_variable").text = value
+
+  @property
+  def micro_variable(self) -> str | None:
+    node = self.find("micro_variable")
+    return None if node is None else node.text
+
+  @micro_variable.setter
+  def micro_variable(self, value: str) -> None:
+    find_node(self, "micro_variable").text = value
+
+  @listproperty
+  def signals(self) -> list[str]:
+    node = self.find("macro_variable")
+    return getattr(node, "text", []) or []
+
+  @signals.setter
+  def signals(self, value: list[str]) -> None:
+    find_node(self, "signals").text = value
 
 class TealCashFlowPlot(OutStream):
   """

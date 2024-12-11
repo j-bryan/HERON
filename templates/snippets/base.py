@@ -1,8 +1,7 @@
 from typing import Any
-import inspect
 import xml.etree.ElementTree as ET
 
-from templates.utils import attrib_property
+from ..utils import merge_trees
 
 class RavenSnippet(ET.Element):
   """
@@ -14,26 +13,27 @@ class RavenSnippet(ET.Element):
   subtype = None  # subtype of the snippet entity, does not need to be defined for all snippets
 
   @classmethod
-  def _create_accessors(cls):
+  def from_xml(cls, node: ET.Element) -> "RavenSnippet":
     """
-    A shorthand for creating class properties to get and set node attributes and subnode text
-    @ In, None
-    @ Out, None
+    Alternate constructor which instantiates a new RavenSnippet object from an existing XML node
+    @ In, node, ET.Element, the template node
+    @ Out, snippet, RavenSnippet, the new snippet
     """
-    attrib_property(cls, "name")
+    snippet = cls()
+    snippet.attrib.update(node.attrib)
+    snippet.text = node.text
+    snippet = merge_trees(snippet, node)
+    return snippet
 
   def __init__(self,
                name: str | None = None,
-               subelements: dict[str, Any] = {},
-               **kwargs) -> None:
+               subelements: dict[str, Any] = {}) -> None:
     """
     @ In, name, str, the name of the entity
     @ In, subelements, dict[str, Any], optional, keyword settings which are added as XML child nodes
-    @ In, kwargs, dict, optional, additional keyword arguments added to the Element attributes
     @ Out, None
     """
     super().__init__(self.tag)
-    self._create_accessors()
 
     # Update node attributes with provided values
     # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and provide
@@ -42,7 +42,6 @@ class RavenSnippet(ET.Element):
       self.name = name
     if self.subtype is not None:
       self.attrib["subType"] = self.subtype
-    self.attrib.update(kwargs)
 
     self.add_subelements(subelements)
 
@@ -55,25 +54,13 @@ class RavenSnippet(ET.Element):
       return name
     return super().__repr__()
 
-  @classmethod
-  def from_xml(cls, node: ET.Element) -> "RavenSnippet":
-    """
-    Alternate constructor which instantiates a new RavenSnippet object from an existing XML node
-    @ In, node, ET.Element, the template node
-    @ Out, snippet, RavenSnippet, the new snippet
-    """
-    # Default implementation is to copy everything from the existing node into a new RavenSnippet object.
-    # Looking at the class __init__ method signature can help us get the arguments right, such as getting the "name" attribute
-    # from the XML node and passing that to the class constructor.
-    init_signature = inspect.signature(cls.__init__)
-    init_params = {k: node.get(k, v.default) for k, v in init_signature.parameters.items()}  # first argument is "self"; skip it
-    init_params.pop("self")
-    snippet = cls(**init_params)
-    snippet.attrib.update(node.attrib)
-    snippet.text = node.text
-    for child in node:
-      snippet.append(child)
-    return snippet
+  @property
+  def name(self) -> str | None:
+    return self.get("name", None)
+
+  @name.setter
+  def name(self, value: str) -> None:
+    self.set("name", value)
 
   # Subtree building utilities
   def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:

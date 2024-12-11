@@ -1,41 +1,43 @@
-from ..utils import attrib_property
+from ..utils import find_node
+from ..decorators import listproperty
 from .base import RavenSnippet
 
 
 class Database(RavenSnippet):
   snippet_class = "Databases"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    attrib_property(cls, "read_mode", "readMode")
-    attrib_property(cls, "directory")
-    attrib_property(cls, "filename")
+  @property
+  def read_mode(self) -> str | None:
+    return self.get("readMode", None)
 
-  def __init__(self,
-               name: str,
-               read_mode: str = "overwrite",
-               directory: str = "",
-               filename: str = "",
-               compression: str = "",
-               variables: list[str] = []):
-    """
-    Database snippet constructor
-    @ In, name, str,
-    """
-    super().__init__(name)
-    self.read_mode = read_mode
-    self.directory = directory
-    # Only setting if a non-empty string is provided makes it so these are optional and do not appear in the XML node
-    # attributes if they have not been set.
-    if filename:
-      self.filename = filename
-    if compression:
-      self.compression = compression
+  @read_mode.setter
+  def read_mode(self, value: str) -> None:
+    self.set("readMode", value)
 
-    # We use a set to keep track of variables to avoid accidentally adding duplicate variable names and because
-    # the order of variables doesn't matter here.
-    self.variables = set(variables)
+  @property
+  def directory(self) -> str | None:
+    return self.get("directory", None)
+
+  @directory.setter
+  def directory(self, value: str) -> None:
+    self.set("directory", value)
+
+  @property
+  def filename(self) -> str | None:
+    return self.get("filename", None)
+
+  @filename.setter
+  def filename(self, value: str) -> None:
+    self.set("filename", value)
+
+  @listproperty
+  def variables(self) -> list[str]:
+    node = self.find("variables")
+    return getattr(node, "text", []) or []
+
+  @variables.setter
+  def variables(self, value: list[str]) -> list[str]:
+    find_node(self, "variables").text = value
 
   #####################
   # Getters & Setters #
@@ -51,7 +53,10 @@ class NetCDF(Database):
 class HDF5(Database):
   tag = "HDF5"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    attrib_property(cls, "compression")
+  @property
+  def compression(self) -> str | None:
+    return self.get("compression", None)
+
+  @compression.setter
+  def compression(self, value: str) -> None:
+    self.set("compression", value)

@@ -1,16 +1,13 @@
-import xml.etree.ElementTree as ET
-from collections import defaultdict
-
 from .base import RavenSnippet
 
 
 class Step(RavenSnippet):
   snippet_class = "Steps"
+  _allowed_subs = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
 
-  def __init__(self, name: str) -> None:
+  def __init__(self, name: str | None = None) -> None:
     # FIXME: step attribute options not exposed in HERON input
     super().__init__(name)
-    self._allowed_subs = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
 
   def _add_item(self, tag: str, entity: RavenSnippet) -> None:
     if tag not in self._allowed_subs:
@@ -65,25 +62,16 @@ class Step(RavenSnippet):
 
 class IOStep(Step):
   tag = "IOStep"
-
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    self._allowed_subs = ["Input", "Output"]
+  _allowed_subs = ["Input", "Output"]
 
 
 class MultiRun(Step):
   tag = "MultiRun"
 
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-
 
 class PostProcess(Step):
   tag = "PostProcess"
-
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    self._allowed_subs = ["Input", "Model", "Output"]
+  _allowed_subs = ["Input", "Model", "Output"]
 
 
 # Unused RAVEN steps: SingleRun, RomTrainer

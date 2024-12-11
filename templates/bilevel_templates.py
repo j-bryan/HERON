@@ -76,11 +76,11 @@ class OuterTemplate(RavenTemplate):
     # Set up some helpful variable groups
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
     capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"]))
-    capacities_vargroup.add_variables(*capacities_vars)
+    capacities_vargroup.variables.extend(capacities_vars)
 
     results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
     results_vars = self._get_statistical_results_vars(case, components)
-    results_vargroup.add_variables(*results_vars)
+    results_vargroup.variables.extend(results_vars)
 
     # Define the sweep or optimize MultiRun steps and its necessary optimizers, samplers, data objects, etc.
     if case.get_mode() == "sweep":
@@ -115,6 +115,8 @@ class OuterTemplate(RavenTemplate):
       # set outer batchsize and InternalParallel
       run_info.batch_size = case.outerParallel
       run_info.internal_parallel = True
+    else:
+      run_info.batch_size = 1
 
     if case.useParallel:
       #XXX this doesn't handle non-mpi modes like torque or other custom ones
@@ -198,7 +200,7 @@ class InnerTemplate(RavenTemplate):
     #     - add variables to GRO_capacities
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
     capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
-    capacities_vargroup.add_variables(*list(capacities_vars))
+    capacities_vargroup.variables.extend(list(capacities_vars))
     for k, v in capacities_vars.items():
       val = "" if isinstance(v, list) else v  # empty string is overwritten by capacity from outer in write_inner.py
       mc.add_constant(k, val)
@@ -212,8 +214,8 @@ class InnerTemplate(RavenTemplate):
 
     # Add dispatch variables to GRO_init_disp, GRO_full_dispatch
     dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
-    self._template.find("VariableGroups/Group[@name='GRO_init_disp']").add_variables(*dispatch_vars)
-    self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").add_variables(*dispatch_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_init_disp']").variables.extend(dispatch_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
 
     # Set time variable names
     #   - add time index names in all DataSet objects (replacing "Time", "Year" default names)
@@ -230,9 +232,9 @@ class InnerTemplate(RavenTemplate):
     activity_vars = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
     econ_vars = case.get_econ_metrics(nametype="output")
     output_vars = econ_vars + activity_vars
-    self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']").add_variables(*output_vars)
-    self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']").add_variables(*output_vars)
-    self._template.find("DataObjects/PointSet[@name='arma_metrics']").add_outputs(*output_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']").variables.extend(output_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']").variables.extend(output_vars)
+    self._template.find("DataObjects/PointSet[@name='arma_metrics']").outputs.extend(output_vars)
 
     # Figure out what result statistics are being used
     #   - outer product of ({econ metrics (NPV, IRR, etc.)} U {activity variables "TotalActivity_*"}) x {statistics to use (mean, std, etc.)}
@@ -244,7 +246,7 @@ class InnerTemplate(RavenTemplate):
     #     - skip financial metrics (valueAtRisk, expectedShortfall, etc) for any TotalActivity* variable
     vg_final_return = self._template.find("VariableGroups/Group[@name='GRO_final_return']")
     results_vars = self._get_statistical_results_vars(case, components)
-    vg_final_return.add_variables(*results_vars)
+    vg_final_return.variables.extend(results_vars)
 
     econ_pp = self._template.find("Models/PostProcessor[@name='statistics']")
     # Econ metrics with all statistics names
@@ -274,8 +276,6 @@ class InnerTemplate(RavenTemplate):
     self._add_snippet(disp_results)
     write_metrics_stats.add_output(disp_results)
 
-    print(f"\n\n\n\nCreating inner workflow\n\n\n\n")
-
   def get_dispatch_results_name(self) -> str:
     """
     Gets the name of the Database or OutStream used to export the dispatch results to the outer workflow
@@ -295,6 +295,8 @@ class InnerTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.internal_parallel = True
       run_info.batch_size = case.innerParallel
+    else:
+      run_info.batch_size = 1
 
   def _add_case_labels_to_sampler(self, case_labels: dict[str, str]) -> None:
     """
@@ -307,11 +309,11 @@ class InnerTemplate(RavenTemplate):
 
     mc = self._template.find("Samplers/MonteCarlo[@name='mc']")
     vg_case_labels = VariableGroup("GRO_case_labels")
-    self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").add_variables(vg_case_labels.name)
-    self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").add_variables(vg_case_labels.name)
+    self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_case_labels.name)
+    self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_case_labels.name)
     for k, label_val in case_labels.items():
       label_name = self.namingTemplates["variable"].format(unit=k, feature="label")
-      vg_case_labels.add_variables(label_name)
+      vg_case_labels.variables.append(label_name)
       mc.add_constant(label_name, label_val)
 
   def _set_time_vars(self, time_name: str, year_name: str) -> None:
@@ -323,7 +325,7 @@ class InnerTemplate(RavenTemplate):
     """
     for vg in ["GRO_dispatch", "GRO_full_dispatch_indices"]:
       group = self._template.find(f"VariableGroups/Group[@name='{vg}']")
-      group.add_variables(time_name, year_name)
+      group.variables.extend([time_name, year_name])
 
     for time_index in self._template.findall("DataObjects/DataSet/Index[@var='Time']"):
       time_index.set("var", time_name)
@@ -359,7 +361,7 @@ class InnerTemplate(RavenTemplate):
         self._add_snippet(dist_snippet)  # added to Distributions
 
         # Add uncertain parameter to econ UQ variable group
-        vg_econ_uq.add_variables(feat_name)
+        vg_econ_uq.variables.append(feat_name)
 
         # Add distribution to MonteCarlo sampler
         sampler_var = SampledVariable(feat_name)

@@ -30,7 +30,6 @@ def get_stat_prefixes(stat_names: list[str], case) -> list[str]:
 
   return stat_prefixes
 
-
 def get_result_stats(names: list[str], stats: list[str], case, naming_template: str):
   """
     Constructs the names of the statistics requested for output
@@ -43,7 +42,6 @@ def get_result_stats(names: list[str], stats: list[str], case, naming_template: 
   stat_prefixes = get_stat_prefixes(stats, case)
   stat_names = [naming_template.format(prefix=prefix, name=name) for prefix, name in itertools.product(stat_prefixes, names)]
   return stat_names
-
 
 def get_statistical_results_vars(case, components: list, default_stats: list[str], financial_stats: list[str], naming_templates: dict[str, str] = {}) -> list[str]:
   """
@@ -68,7 +66,6 @@ def get_statistical_results_vars(case, components: list, default_stats: list[str
   var_names = stats_var_names + activity_var_names
 
   return var_names
-
 
 def get_capacity_vars(components, name_template, debug=False) -> dict[str, Any]:
   """
@@ -104,7 +101,6 @@ def get_capacity_vars(components, name_template, debug=False) -> dict[str, Any]:
 
   return vars
 
-
 def get_component_activity_vars(components: list, name_template: str) -> list[str]:
   """
   Get dispatch variable names
@@ -124,7 +120,6 @@ def get_component_activity_vars(components: list, name_template: str) -> list[st
         vars.append(var_name)
 
   return vars
-
 
 def parse_xpath(xpath: str):
   """
@@ -203,7 +198,7 @@ def _to_string(val: Any, delimiter: str = ", ") -> str:
     return val
   elif isinstance(val, dict):
     raise TypeError(f"Unable to convert dicts to node text. Received type '{type(val)}'.")
-  elif hasattr(val, "__iter__") and not isinstance(val, str):  # lists, sets, numpy arrays, etc.
+  elif hasattr(val, "__iter__") and not isinstance(val, str):  # lists, ListWrapper, sets, numpy arrays, etc.
     # return as comma-separated string
     return delimiter.join([str(v) for v in val])
   else:  # numeric types and other objects, including RavenSnippet objects
@@ -234,77 +229,44 @@ def find_node(parent: ET.Element, tag: str, make_if_missing: bool = True) -> ET.
 
   return node
 
-def get_node_index(parent: ET.Element, child: ET.Element) -> int | None:
+def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, match_attrib: bool = True) -> ET.Element:
   """
-  Get the index of a node in its parent
-  @ In, parent, ET.Element, parent node
-  @ In, child, ET.Element, child node
-  @ Out, index, int | None, index of the child (None if not found)
+  Merge "right" tree into "left" tree. Equivalent nodes are defined by having equal tags and attributes. If overwrite
+  is True, the attributes and text of an element of "left" will be overwritten by the values in a matching node in
+  "right", if present. Equality is determined by either just the tag (match_attrib=False) or the tag and all attribute
+  values (match_attrib=False). If overwrite is False, all leaf nodes from right are added to left in the matching
+  location.
+
+  @ In, left, ET.Element, the first tree
+  @ In, right, ET.Element, the second tree
+  @ In overwrite, bool, optional, if duplicate nodes
   """
-  for i, sub in enumerate(parent):
-    if child == sub:
-      return i
-  return None
+  def find_matching_node(node, candidates):
+    for candidate in candidates:
+      if node.tag != candidate.tag:
+        continue
+      if match_attrib:
+        if node.attrib == candidate.attrib:
+          return candidate
+      else:
+        return candidate
+    return None
 
+  def merge_nodes(left_node, right_node):
+    matching_node = find_matching_node(right_node, left_node)
+    if matching_node is not None:
+      if overwrite:
+        matching_node.attrib.update(right_node.attrib)
+        matching_node.text = right_node.text
+      for r_child in right_node:
+        merge_nodes(matching_node, r_child)
+    else:
+      new_elem = ET.SubElement(left_node, right_node.tag, right_node.attrib)
+      new_elem.text = right_node.text
+      for r_child in right_node:
+        merge_nodes(new_elem, r_child)
 
-def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None, *, default=None, prop_type=None):
-  """
-  Creates a class property that gets/sets a child node text value
-  @ In, cls, ET.Element, the ET.Element class or a subclass of it
-  @ In, prop_name, str, property name
-  @ In, node_tag, str | None, optional, tag or path of the node the property is tied to (default=prop_name)
-  @ In, default, Any, optional, the default getter value
-  @ In, prop_type, type, type of property value
-  @ Out, None
-  """
-  if node_tag is None:
-    node_tag = prop_name
+  for r_child in right:
+    merge_nodes(left, r_child)
 
-  def getter(self):
-    node = self.find(node_tag)
-    if node is None:
-      return default
-    val = node.text
-    val = val if prop_type is None else prop_type(val)
-    return val
-
-  def setter(self, val):
-    val = val if prop_type is None else prop_type(val)
-    find_node(self, node_tag).text = val
-
-  def deleter(self):
-    if (node := self.find(node_tag)) is not None:
-      self.remove(node)
-
-  doc = f"Accessor property for '{node_tag}' node text"
-  setattr(cls, prop_name, property(getter, setter, deleter, doc=doc))
-
-
-def attrib_property(cls: ET.Element, prop_name: str, attrib_name: str | None = None, *, default=None, prop_type=None):
-  """
-  Creates a class property that gets/sets a node attribute value
-  @ In, cls, ET.Element, the ET.Element class or a subclass of it
-  @ In, prop_name, str, property name
-  @ In, attrib_name, str | None, optional, name of the node attribute the property is tied to (default=prop_name)
-  @ In, default, Any, optional, the default getter value
-  @ In, prop_type, type, type of property value
-  @ Out, None
-  """
-  if attrib_name is None:
-    attrib_name = prop_name
-
-  def getter(self):
-    val = self.get(attrib_name, default)
-    if val is not None and prop_type is not None:
-      val = prop_type(val)
-    return val
-
-  def setter(self, val):
-    val = val if prop_type is None else prop_type(val)
-    self.set(attrib_name, val)
-
-  def deleter(self):
-    self.attrib.pop(attrib_name, None)
-
-  doc = f"Accessor property for '{attrib_name}' node attribute"
-  setattr(cls, prop_name, property(getter, setter, deleter))
+  return left

@@ -4,39 +4,15 @@ Optimization features
 @author: Jacob Bryan (@j-bryan)
 @date: 2024-11-08
 """
-from typing import Any
-import xml.etree.ElementTree as ET
-
-from ..utils import find_node, node_property
+from ..utils import find_node
 from .base import RavenSnippet
 from .samplers import Sampler
-from .models import Model
 from .dataobjects import DataObject
 
 
 class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance structure
   """ A base class for RAVEN optimizer XML snippets """
   snippet_class = "Optimizers"
-
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "objective")
-
-  def __init__(self, name: str):
-    super().__init__(name)
-    # "objective" and "TargetEvaluation" subnodes are required for all optimizers implemented here
-    ET.SubElement(self, "objective")
-    ET.SubElement(self, "TargetEvaluation")
-
-  def set_target_data_object(self, data_object: DataObject):
-    # The TargetEvaluation node has an assembler node format with the TargetEvaluation tag. It's not really an
-    # assembler node, but it follows the same format.
-    assemb_node = data_object.to_assembler_node("TargetEvaluation")
-    # Copy assembler node info over to the existing TargetEvaluation node
-    target_eval = self.find("TargetEvaluation")
-    target_eval.attrib.update(assemb_node.attrib)
-    target_eval.text = assemb_node.text
 
   def set_opt_settings(self, opt_settings: dict) -> None:
     """
@@ -57,6 +33,33 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
     sampler_init = find_node(self, "samplerInit")
     for name in opt_settings.keys() & {"limit", "type"}:  # writeEvery not exposed in HERON input
       find_node(sampler_init, name).text = opt_settings[name]
+
+  @property
+  def objective(self) -> str | None:
+    node = self.find("objective")
+    return None if node is None else node.text
+
+  @objective.setter
+  def objective(self, value: str) -> None:
+    find_node(self, "objective").text = value
+
+  @property
+  def target_evaluation(self) -> str | None:
+    node = self.find("TargetEvaluation")
+    return None if node is None else node.text
+
+  @target_evaluation.setter
+  def target_evaluation(self, value: DataObject) -> None:
+    if not isinstance(value, DataObject):
+      raise TypeError(f"Optimizer evaluation target must be set with a DataObject object. Received '{type(value)}'")
+    assemb = value.to_assembler_node("TargetEvaluation")
+    # Copy assembler node info over to the existing TargetEvaluation node
+    target_eval = self.find("TargetEvaluation")
+    if target_eval is None:
+      self.append(assemb)
+    else:
+      target_eval.attrib.update(assemb.attrib)
+      target_eval.text = assemb.text
 
 #########################
 # Bayesian Optimization #
@@ -85,10 +88,8 @@ class BayesianOptimizer(Optimizer):
     "Acquisition": ""
   }
 
-  def __init__(self, name: str):
-    super().__init__(name)
-    # Set settings to default on initialization. Can be modified later via the set_opt_settings method.
-    self.add_subelements(self.default_settings)
+  def __init__(self, name: str | None = None):
+    super().__init__(name, self.default_settings)
 
   def set_opt_settings(self, opt_settings):
     super().set_opt_settings(opt_settings)
@@ -129,11 +130,12 @@ class BayesianOptimizer(Optimizer):
     sampler_node.attrib = assemb_node.attrib
     sampler_node.text = assemb_node.text
 
-  def set_rom(self, rom: Model) -> None:
+  def set_rom(self, rom: RavenSnippet) -> None:
     model_node = find_node(self, "ROM")
     assemb_node = rom.to_assembler_node("ROM")
     model_node.attrib = assemb_node.attrib
     model_node.text = assemb_node.text
+
 class ExpectedImprovement(RavenSnippet):
   tag = "ExpectedImprovement"
 
@@ -209,9 +211,8 @@ class GradientDescent(Optimizer):
     }
   }
 
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    self.add_subelements(self.default_settings)
+  def __init__(self, name: str | None = None) -> None:
+    super().__init__(name, self.default_settings)
 
   def set_opt_settings(self, opt_settings: dict) -> None:
     super().set_opt_settings(opt_settings)

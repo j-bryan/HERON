@@ -84,19 +84,10 @@
     <Input name="libs">../../heron.lib</Input>
   </Files>
 
-  <Distributions>
-  </Distributions>
-
   <Samplers>
     <MonteCarlo name='mc_arma_dispatch'>
       <constant name='scaling'>1.0</constant>
     </MonteCarlo>
   </Samplers>
-
-  <Databases>
-  </Databases>
-
-  <OutStreams>
-  </OutStreams>
 
 </Simulation>

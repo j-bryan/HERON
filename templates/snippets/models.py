@@ -1,27 +1,17 @@
-from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..utils import node_property
+from ..utils import find_node
+from ..decorators import listproperty
 from .base import RavenSnippet
 
 
-class Model(RavenSnippet):
-  snippet_class = "Models"
-
-  def __init__(self, name: str, settings: dict[str, Any] = {}):
-    super().__init__(name, subelements=settings)
-
-class RavenCode(Model):
+class RavenCode(RavenSnippet):
   """
   Sets up a <Code> model to run inner RAVEN workflow.
   """
   tag = "Code"
+  snippet_class = "Models"
   subtype = "RAVEN"
-
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "executable")
 
   def set_py_cmd(self, cmd: str) -> None:
     """
@@ -60,61 +50,94 @@ class RavenCode(Model):
       keep_node = ET.SubElement(self, keep_tag)
     keep_node.text = dest
 
-class GaussianProcessRegressor(Model):
+  @property
+  def executable(self) -> str | None:
+    node = self.find("executable")
+    return None if node is None else node.text
+
+  @executable.setter
+  def executable(self, value: str) -> None:
+    find_node(self, "executable").text = value
+
+class GaussianProcessRegressor(RavenSnippet):
   tag = "ROM"
+  snippet_class = "Models"
   subtype = "GaussianProcessRegressor"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "features", "Features")
-    node_property(cls, "target", "Target")
-    node_property(cls, "kernel", "custom_kernel")
-
-  default_settings = {
-    "Features": "",  # needs case & component info to populate
-    "Target": "",    # needs case & component info to populate
-    "alpha": 1e-8,
-    "n_restarts_optimizer": 5,
-    "normalize_y": True,
-    "kernel": "Custom",
-    "custom_kernel": "(Constant*Matern)",
-    "anisotropic": True,
-    "multioutput": False
-  }
-
-  def __init__(self, name: str):
+  def __init__(self, name: str | None = None):
     # FIXME: Only custom_kernel setting exposed to HERON input
-    super().__init__(name, self.default_settings)
+    default_settings = {
+      "alpha": 1e-8,
+      "n_restarts_optimizer": 5,
+      "normalize_y": True,
+      "kernel": "Custom",
+      "custom_kernel": "(Constant*Matern)",
+      "anisotropic": True,
+      "multioutput": False
+    }
+    super().__init__(name, default_settings)
 
-class EnsembleModel(Model):
+  @listproperty
+  def features(self) -> list[str]:
+    node = self.find("Features")
+    return getattr(node, "text", []) or []
+
+  @features.setter
+  def features(self, value: list[str]) -> None:
+    find_node(self, "Features").text = value
+
+  @property
+  def target(self) -> str:
+    node = self.find("Target")
+    return None if node is None else node.text
+
+  @target.setter
+  def target(self, value: str) -> None:
+    find_node(self, "Target").text = value
+
+  @property
+  def custom_kernel(self) -> str:
+    node = self.find("custom_kernel")
+    return node.text
+
+  @custom_kernel.setter
+  def custom_kernel(self, value: str) -> None:
+    self.find("custom_kernel").text = value
+
+class EnsembleModel(RavenSnippet):
   tag = "EnsembleModel"
+  snippet_class = "Models"
 
-  def __init__(self, name: str) -> None:
+  def __init__(self, name: str | None = None) -> None:
     super().__init__(name)
-    self.attrib["subType"] = ""  # subType attribute must be present but must be empty
+    self.set("subType", "")  # subType attribute must be present but must be empty
 
-class EconomicRatioPostProcessor(Model):
+class EconomicRatioPostProcessor(RavenSnippet):
   tag = "PostProcessor"
+  snippet_class = "Models"
   subtype = "EconomicRatio"
 
   def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
     ET.SubElement(self, tag, prefix=prefix, **kwargs).text = variable
 
-class ExternalModel(Model):
+class ExternalModel(RavenSnippet):
   tag = "ExternalModel"
+  snippet_class = "Models"
   subtype = ""
 
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    self._variables = []  # list[str]
+  @listproperty
+  def variables(self) -> list[str]:
+    return self.text or []
 
-  def add_variable(self, *vars: str) -> None:
-    self._variables.extend(vars)
-    self.text = self._variables
+  @variables.setter
+  def variables(self, value: list[str]) -> None:
+    self.text = value
+
 class HeronDispatchModel(ExternalModel):
   subtype = "HERON.DispatchManager"
+  snippet_class = "Models"
 
-class PickledROM(Model):
+class PickledROM(RavenSnippet):
   tag = "ROM"
+  snippet_class = "Models"
   subtype = "pickledROM"

@@ -4,10 +4,7 @@ Sampler features
 @author: Jacob Bryan (@j-bryan)
 @date: 2024-11-08
 """
-from typing import Any
 import xml.etree.ElementTree as ET
-
-from ..utils import _to_string, node_property
 
 from ..utils import find_node
 from .base import RavenSnippet
@@ -19,53 +16,70 @@ from .distributions import Distribution
 class SampledVariable(RavenSnippet):
   tag = "variable"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "initial")
-    node_property(cls, "distribution")
+  def use_grid(self, type: str, construction: str, values: list[float], steps: int | None = None) -> None:
+    attrib = {"type": type, "construction": construction}
+    if steps:
+      attrib["steps"] = steps
+    ET.SubElement(self, "grid", attrib).text = " ".join([str(v) for v in values])
 
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
+  @property
+  def initial(self) -> float | None:
+    node = self.find("initial")
+    return None if node is None else node.text
 
-  def use_grid(self, construction="equal", type="CDF", steps: int | None = None, values: list[float] = [0, 1]) -> None:
-    if type == "CDF" and not all([0 <= val <= 1 for val in values]):
-      raise ValueError(f"All CDF values must lie on the interval [0, 1]. Values received: {values}.")
+  @initial.setter
+  def initial(self, value: float) -> None:
+    find_node(self, "initial").text = value
 
-    grid_node = find_node(self, "grid")
-    grid_node.set("construction", construction)
-    grid_node.set("type", type)
-    if construction == "equal":
-      grid_node.set("steps", steps)
-    grid_node.text = _to_string(values, delimiter=" ")  # Direct call to _to_string to use space-delimited list join
+  @property
+  def distribution(self) -> str:
+    node = self.find("distribution")
+    return None if node is None else node.text
+
+  @distribution.setter
+  def distribution(self, value: Distribution) -> None:
+    find_node(self, "distribution").text = value
 
 
 class Sampler(RavenSnippet):
   snippet_class = "Samplers"
 
-  @classmethod
-  def _create_accessors(cls):
-    super()._create_accessors()
-    node_property(cls, "denoises", "constant[@name='denoises']")
-    node_property(cls, "sampler_init_seed", "samplerInit/initialSeed")
-    node_property(cls, "sampler_init_limit", "samplerInit/limit")
-
-  def __init__(self, name: str) -> None:
-    super().__init__(name)
-    # TODO: samplerInit node?
-    self._num_sampled_vars = 0
-
   @property
   def num_sampled_vars(self) -> int:
-    return self._num_sampled_vars
+    return len(self.findall("variable"))
+
+  @property
+  def denoises(self) -> int | None:
+    node = self.find("constant[@name='denoises']")
+    return None if node is None else node.text
+
+  @denoises.setter
+  def denoises(self, value: int) -> None:
+    find_node(self, "constant[@name='denoises']").text = value
+
+  @property
+  def init_seed(self) -> int | None:
+    node = self.find("samplerInit/initialSeed")
+    return None if node is None else node.text
+
+  @init_seed.setter
+  def init_seed(self, value: int) -> None:
+    find_node(self, "samplerInit/initialSeed").text = value
+
+  @property
+  def init_limit(self) -> int | None:
+    node = self.find("samplerInit/limit")
+    return None if node is None else node.text
+
+  @init_limit.setter
+  def init_limit(self, value: int) -> None:
+    find_node(self, "samplerInit/limit").text = value
 
   def add_variable(self, variable: SampledVariable) -> None:
     self.append(variable)
-    self._num_sampled_vars += 1
 
   def add_constant(self, name: str, value: str) -> None:
-    constant = ET.SubElement(self, "constant", attrib={"name": name})
-    constant.text = _to_string(value)
+    ET.SubElement(self, "constant", attrib={"name": name}).text = value
 
 
 class Grid(Sampler):
@@ -74,10 +88,10 @@ class Grid(Sampler):
 class MonteCarlo(Sampler):
   tag = "MonteCarlo"
 
-  def __init__(self, name: str) -> None:
+  def __init__(self, name: str | None = None) -> None:
     super().__init__(name)
-    self.sampler_init_seed = 42
-    self.sampler_init_limit = 3
+    self.init_seed = 42
+    self.init_limit = 3
 
 class Stratified(Sampler):
   tag = "Stratified"

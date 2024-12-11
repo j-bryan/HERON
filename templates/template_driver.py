@@ -45,8 +45,11 @@ class TemplateDriver(Base):
   # Public API #
   ##############
   def create_workflow(self, case, components, sources) -> list[RavenTemplate]:
+    if any(s.is_type("CSV") for s in sources):
+      raise NotImplementedError
     # Flat or bilevel template?
     if case.debug["enabled"]:
+      raise NotImplementedError
       self._template = DebugTemplate()
     elif self._all_capacities_fixed(components):  # Can use flat inner
       self._template = FlatMultiConfigTemplate()

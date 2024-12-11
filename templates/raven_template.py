@@ -12,20 +12,20 @@ import itertools
 import dill as pk
 import xml.etree.ElementTree as ET
 
-from .snippets.factory import factory as snippet_factory
+from .utils import get_component_activity_vars, add_node_to_tree, find_node, stringify_node_values
+
 from .snippets.base import RavenSnippet
 from .snippets.runinfo import RunInfo
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
 from .snippets.samplers import Sampler, SampledVariable, Grid, Stratified, MonteCarlo, CustomSampler
 from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
-from .snippets.models import Model, RavenCode, GaussianProcessRegressor, PickledROM, EconomicRatioPostProcessor
+from .snippets.models import RavenCode, GaussianProcessRegressor, PickledROM, EconomicRatioPostProcessor
 from .snippets.distributions import Distribution, Uniform
 from .snippets.outstreams import OutStream, PrintOutStream, OptPathPlot
 from .snippets.dataobjects import DataObject, PointSet, DataSet
 from .snippets.variablegroups import VariableGroup
 from .snippets.files import File
-
-from .utils import get_component_activity_vars, add_node_to_tree, find_node, stringify_node_values
+from .snippets.factory import factory as snippet_factory
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -33,6 +33,7 @@ import HERON.src._utils as hutils
 from HERON.src.Cases import Case
 from HERON.src.Components import Component
 from HERON.src.Placeholders import Placeholder
+from HERON.src.ValuedParams import ValuedParam
 sys.path.pop()
 
 RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
@@ -41,7 +42,6 @@ sys.path.append(os.path.join(RAVEN_LOC, '..'))
 from ravenframework.utils import xmlUtils
 from ravenframework.InputTemplates.TemplateBaseClass import Template
 sys.path.pop()
-
 
 
 def parse_to_snippets(node: ET.Element) -> ET.Element:
@@ -68,7 +68,6 @@ def parse_to_snippets(node: ET.Element) -> ET.Element:
     parsed.append(parsed_child)
 
   return parsed
-
 
 class RavenTemplate(Template):
   """ Template class for RAVEN workflows """
@@ -198,7 +197,7 @@ class RavenTemplate(Template):
   # These functions help to define and connect features of the RAVEN workflow for "sweep" and "opt" modes. These are
   # broadly applicable across bilevel and flat workflows.
 
-  def _sweep_case(self, inputs: list[RavenSnippet], model: Model, case: Case, components: list[Component], sources: list[Placeholder]) -> MultiRun:
+  def _sweep_case(self, inputs: list[RavenSnippet], model: RavenSnippet, case: Case, components: list[Component], sources: list[Placeholder]) -> MultiRun:
     """
     Sets up everything necessary for running a sweep with "model" and outputting the results.
     @ In, inputs, list[RavenSnippet], list of inputs to add as Input nodes in the optimization MultiRun step
@@ -212,8 +211,8 @@ class RavenTemplate(Template):
     results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
 
     results_data = PointSet("grid")
-    results_data.add_inputs(capacities_vargroup)
-    results_data.add_outputs(results_vargroup)
+    results_data.inputs = [capacities_vargroup]
+    results_data.outputs = [results_vargroup]
     self._add_snippet(results_data)
 
     # Define grid sampler and build the variables and their distributions that it'll sample
@@ -251,7 +250,7 @@ class RavenTemplate(Template):
     # FIXME: Dynamically figure out what order the steps should be in? (probably just leave it to the developer)
     self._add_step_to_sequence(multirun)
 
-  def _opt_case(self, inputs: list[RavenSnippet], model: Model, case: Case, components: list[Component], sources: list[Placeholder]):
+  def _opt_case(self, inputs: list[RavenSnippet], model: RavenSnippet, case: Case, components: list[Component], sources: list[Placeholder]):
     """
     Sets up everything necessary for running an optimizer with "model" and outputting the results.
     @ In, inputs, list[RavenSnippet], list of inputs to add as Input nodes in the optimization MultiRun step
@@ -266,13 +265,13 @@ class RavenTemplate(Template):
 
     # Create data objects for exporting optimization path and recording the points tried in the optimization
     solution_export = PointSet("opt_soln")
-    solution_export.add_inputs("trajID")
-    solution_export.add_outputs(["iteration", "accepted", capacities_vargroup, results_vargroup])
+    solution_export.inputs = ["trajID"]
+    solution_export.outputs = ["iteration", "accepted", capacities_vargroup, results_vargroup]
     self._add_snippet(solution_export)
 
     results_data = PointSet("opt_eval")
-    results_data.add_inputs(capacities_vargroup)
-    results_data.add_outputs(results_vargroup)
+    results_data.inputs = [capacities_vargroup]
+    results_data.outputs = [results_vargroup]
     self._add_snippet(results_data)
 
     # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
@@ -285,7 +284,7 @@ class RavenTemplate(Template):
       raise ValueError(f"Template does not recognize optimization strategy {opt_strategy}.")
 
     # Set optimizer <TargetEvaluation> data object
-    optimizer.set_target_data_object(results_data)
+    optimizer.target_evaluation = results_data
 
     # Set optimizer objective function
     objective = self._get_opt_metric_out_name(case)
@@ -293,12 +292,6 @@ class RavenTemplate(Template):
 
     # Add case labels to the optimizer
     self._add_labels(optimizer, case)
-
-    # Print the results of the optimization
-    print_results = PrintOutStream("opt_soln")
-    print_results.source = solution_export
-    print_results.add_subelements(clusterLabel="trajID")
-    self._add_snippet(print_results)
 
     # Create a MultiRun step to run the optimization
     multirun = MultiRun("optimize")
@@ -308,7 +301,6 @@ class RavenTemplate(Template):
     multirun.add_optimizer(optimizer)
     multirun.add_solution_export(solution_export)
     multirun.add_output(results_data)
-    multirun.add_output(print_results)
     self._add_snippet(multirun)
 
     # Plot the result of the optimization
@@ -318,9 +310,16 @@ class RavenTemplate(Template):
     opt_path_plot.variables = ["GRO_capacities", objective]
     self._add_snippet(opt_path_plot)
 
+    # Print the results of the optimization
+    print_results = PrintOutStream("opt_soln")
+    print_results.source = solution_export
+    print_results.add_subelements(clusterLabel="trajID")
+    self._add_snippet(print_results)
+
     plot_step = IOStep(f"plot")
     plot_step.add_input(solution_export)
     plot_step.add_output(opt_path_plot)
+    plot_step.add_output(print_results)
     self._add_snippet(plot_step)
 
     # Add steps to the Sequence in RunInfo
@@ -351,7 +350,7 @@ class RavenTemplate(Template):
     @ In, case_name, str, optional, the case name
     @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
-    run_info = self._template.find("RunInfo")
+    run_info = self._template.find("RunInfo")  # type: RunInfo
 
     if case_name:
       run_info.job_name = case_name
@@ -360,19 +359,23 @@ class RavenTemplate(Template):
     return run_info
 
   def _add_step_to_sequence(self, step: Step, index: int | None = None) -> None:
-    sequence = find_node(self._template, "RunInfo/Sequence")
-    sequence.add_step(step, index)
+    run_info = self._template.find("RunInfo")  # type: RunInfo
+    if index is None:
+      run_info.sequence.append(step)
+    else:
+      run_info.sequence.insert(index, step)
 
   def _get_step_index(self, step: Step | str) -> int | None:
-    sequence = find_node(self._template, "RunInfo/Sequence")
-    idx = sequence.get_step_index(step)
+    run_info = find_node(self._template, "RunInfo")
+    step_name = step.name if isinstance(step, Step) else step
+    idx = run_info.sequence.index(step_name)
     return idx
 
   # Steps
-  def _load_rom(self, source: Placeholder, rom: Model) -> IOStep:
+  def _load_rom(self, source: Placeholder, rom: RavenSnippet) -> IOStep:
     # Create the file input node
     file = File(source.name)
-    file.text = source._target_file
+    file.path = source._source
 
     # create the IOStep
     step_name = self.namingTemplates["stepname"].format(action="read", subject=source.name)
@@ -385,7 +388,7 @@ class RavenTemplate(Template):
 
     return step
 
-  def _print_rom_meta(self, rom: Model) -> IOStep:
+  def _print_rom_meta(self, rom: RavenSnippet) -> IOStep:
     """
     Create an IOStep to print the metadata for a ROM. Makes and adds the requisite DataSet and OutStream nodes.
     @ In, rom, Model, the ROM
@@ -553,14 +556,14 @@ class RavenTemplate(Template):
       # Add loaded ROM to the EnsembleModel
       inp_name = self.namingTemplates['data object'].format(source=source.name, contents='placeholder')
       inp_do = PointSet(inp_name)
-      inp_do.add_inputs("scaling")
+      inp_do.inputs.append("scaling")
       self._add_snippet(inp_do)
 
       eval_name = self.namingTemplates['data object'].format(source=source.name, contents='samples')
       eval_do = DataSet(eval_name)
-      eval_do.add_inputs("scaling")
+      eval_do.inputs.append("scaling")
       out_vars = source.get_variable()
-      eval_do.add_outputs(out_vars)
+      eval_do.outputs.extend(out_vars)
       eval_do.add_index(case.get_time_name(), out_vars)
       eval_do.add_index(case.get_year_name(), out_vars)
       if source.eval_mode == "clustered":
@@ -568,18 +571,16 @@ class RavenTemplate(Template):
       self._add_snippet(eval_do)
 
       # update variable group with ROM output variable names
-      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").add_variables(*out_vars)
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").variables.extend(out_vars)
 
       rom_assemb = rom.to_assembler_node("Model")
-      inp_do_assemb = inp_do.to_assembler_node("Input")
-      eval_do_assemb = eval_do.to_assembler_node("TargetEvaluation")
       rom_assemb.append(inp_do.to_assembler_node("Input"))
       rom_assemb.append(eval_do.to_assembler_node("TargetEvaluation"))
       ensemble_model.append(rom_assemb)
 
       if source.eval_mode == "clustered":
         vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
-        vg_dispatch.add_variables(self.namingTemplates["cluster_index"])
+        vg_dispatch.variables.append(self.namingTemplates["cluster_index"])
         dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
 
   @staticmethod
@@ -604,7 +605,7 @@ class RavenTemplate(Template):
     return sampled_var
 
   # Samplers
-  def _create_sampler_variables(self, case, components) -> tuple[dict, dict]:
+  def _create_sampler_variables(self, case: Case, components: list[Component]) -> tuple[dict[str, SampledVariable], dict[str, ValuedParam]]:
     """
     Create the Distribution and SampledVariable objects and the list of constant capacities that need to
     be added to samplers and optimizers.
@@ -680,12 +681,12 @@ class RavenTemplate(Template):
     optimizer.set_opt_settings(opt_settings)
     # Set GPR kernel if provided
     if opt_settings and (custom_kernel := opt_settings["algorithm"]["BayesianOpt"].get("kernel", None)):
-      gpr.kernel = custom_kernel
+      gpr.custom_kernel = custom_kernel
 
     # Create sampler variables and their respective distributions
     vars, consts = self._create_sampler_variables(case, components)
     for sampled_var, vals in vars.items():
-      sampled_var.use_grid(construction="grid", type="CDF", steps=10)
+      sampled_var.use_grid(construction="equal", type="CDF", steps=4, values=[0, 1])
       optimizer.add_variable(sampled_var)
       sampler.add_variable(sampled_var)
     for var_name, val in consts.items():
@@ -748,7 +749,7 @@ class RavenTemplate(Template):
     files = []
     for function in [s for s in sources if s.is_type("Function")]:
       file = File(function.name)
-      file.text = function._target_file
+      file.path = os.path.join(os.pardir, function._source)
       self._add_snippet(file)
       files.append(file)
     return files
