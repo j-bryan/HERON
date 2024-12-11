@@ -307,7 +307,7 @@ class InnerTemplate(RavenTemplate):
     if not case_labels:
       return
 
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc']")
+    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
     vg_case_labels = VariableGroup("GRO_case_labels")
     self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_case_labels.name)
     self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_case_labels.name)
@@ -337,6 +337,8 @@ class InnerTemplate(RavenTemplate):
     cf_attrs = ["_driver", "_alpha", "_reference", "_scale"]
 
     vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_econ_UQ']")
+    if vg_econ_uq is None:
+      vg_econ_uq = VariableGroup("GRO_econ_UQ")
     mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
 
     # looping through components to find uncertain cashflow attributes
@@ -367,3 +369,6 @@ class InnerTemplate(RavenTemplate):
         sampler_var = SampledVariable(feat_name)
         sampler_var.distribution = dist_snippet
         mc.add_variable(sampler_var)
+
+    if len(vg_econ_uq.variables):
+      self._add_snippet(vg_econ_uq)
