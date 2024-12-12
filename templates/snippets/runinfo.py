@@ -31,46 +31,49 @@ class RunInfo(RavenSnippet):
       par_info_sub.text = value
 
   @property
-  def job_name(self) -> str:
-    return self.find("JobName").text
+  def job_name(self) -> str | None:
+    node = self.find("JobName")
+    return getattr(node, "text", None)
 
   @job_name.setter
   def job_name(self, value: str) -> None:
-    find_node(self, "JobName").text = value
+    find_node(self, "JobName").text = str(value)
 
   @property
-  def working_dir(self) -> str:
-    return self.find("WorkingDir").text
+  def working_dir(self) -> str | None:
+    node = self.find("WorkingDir")
+    return None if node is None or node.text is None else str(node.text)
 
   @working_dir.setter
   def working_dir(self, value: str) -> None:
-    find_node(self, "WorkingDir").text = value
+    find_node(self, "WorkingDir").text = str(value)
 
   @property
   def batch_size(self) -> int:
-    return self.find("batchSize").text
+    node = self.find("batchSize")
+    return None if node is None else int(getattr(node, "text", 1))
 
   @batch_size.setter
-  def batch_size(self, value: str) -> None:
-    find_node(self, "batchSize").text = value
+  def batch_size(self, value: int) -> None:
+    find_node(self, "batchSize").text = int(value)
 
   @property
   def internal_parallel(self) -> bool | None:
-    node = self.find("InternalParallel")
-    return None if node is None else node.text
+    node = self.find("internalParallel")
+    return None if node is None else bool(getattr(node, "text", False))
 
   @internal_parallel.setter
   def internal_parallel(self, value: bool) -> None:
-    find_node(self, "InternalParallel").text = value
+    find_node(self, "internalParallel").text = bool(value)
 
   @property
   def num_mpi(self) -> int | None:
     node = self.find("NumMPI")
-    return None if node is None else node.text
+    return None if node is None else int(getattr(node, "text", 1))
 
   @num_mpi.setter
   def num_mpi(self, value: int) -> None:
-    find_node(self, "NumMPI").text = value
+    find_node(self, "NumMPI").text = int(value)
 
   @listproperty
   def sequence(self) -> list[str]:
@@ -79,4 +82,4 @@ class RunInfo(RavenSnippet):
 
   @sequence.setter
   def sequence(self, value: list[str | Step]) -> None:
-    find_node(self, "Sequence").text = value
+    find_node(self, "Sequence").text = [str(v).strip() for v in value]

@@ -5,120 +5,111 @@ import os
 HERON_LOC = os.path.abspath(os.path.join(os.path.dirname(__file__), *[os.pardir]*4))
 sys.path.append(HERON_LOC)
 
-from HERON.templates.snippets import RunInfo, Sequence
+from HERON.templates.snippets import RunInfo
+from HERON.templates.snippets import IOStep
 sys.path.pop()
 
-import pytest
+import unittest
 import xml.etree.ElementTree as ET
 
-from test_steps import setup_iostep
 
+class TestRunInfo(unittest.TestCase):
+  def setUp(self):
+    self.run_info = RunInfo()
 
-class TestRunInfo:
-  @pytest.fixture(scope="class")
-  def setup_from_xml(self):
     xml = """
     <RunInfo>
       <JobName>test_job_name</JobName>
-      <WorkingDir>.</WorkingDir>
+      <WorkingDir>./working/dir/name</WorkingDir>
       <Sequence>step1, step2</Sequence>
       <batchSize>2</batchSize>
     </RunInfo>
     """
     root = ET.fromstring(xml)
-    run_info = RunInfo.from_xml(root)
-    return run_info
+    run_info_xml = RunInfo.from_xml(root)
+    self.run_info_xml = run_info_xml
 
-  @pytest.fixture(scope="class")
-  def setup_default(self):
-    run_info = RunInfo()
-    return run_info
+  def test_from_xml(self):
+    self.assertEqual(self.run_info_xml.job_name, "test_job_name")
+    self.assertEqual(self.run_info_xml.working_dir, "./working/dir/name")
+    self.assertEqual(self.run_info_xml.batch_size, 2)
+    self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2"])
 
-  def test_snippet_class(self, setup_default):
-    assert not setup_default.snippet_class
+  def test_add_step_to_sequence(self):
+    self.run_info_xml.sequence.append("new_step")
+    self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2", "new_step"])
 
-  def test_tag(self, setup_default):
-    assert setup_default.tag == "RunInfo"
+  def test_snippet_class(self):
+    self.assertIsNone(self.run_info.snippet_class)
 
-  def test_from_xml(self, setup_from_xml):
-    assert setup_from_xml.job_name == "test_job_name"
-    assert setup_from_xml.working_dir == "."
-    assert setup_from_xml.batch_size == 2
+  def test_tag(self):
+    self.assertEqual(self.run_info.tag, "RunInfo")
 
-    sequence = setup_from_xml.find("Sequence")
-    assert sequence.text == ["step1", "step2"]
+  def test_job_name(self):
+    self.assertIsNone(self.run_info.find("JobName"))
+    self.assertIsNone(self.run_info.job_name)
+    job_name = "some_job_name"
+    self.run_info.job_name = job_name
+    self.assertEqual(self.run_info.job_name, job_name)
+    self.assertEqual(self.run_info.find("JobName").text, job_name)
 
-  def test_job_name(self, setup_default):
-    job_name = "new_job_name"
-    setup_default.job_name = job_name
-    assert setup_default.job_name == job_name
-    assert setup_default.find("JobName").text == job_name
-
-  def test_working_dir(self, setup_default):
+  def test_working_dir(self):
+    self.assertIsNone(self.run_info.find("WorkingDir"))
+    self.assertIsNone(self.run_info.working_dir)
     working_dir = "path/to/dir"
-    setup_default.working_dir = working_dir
-    assert setup_default.working_dir == working_dir
-    assert setup_default.find("WorkingDir").text == working_dir
+    self.run_info.working_dir = working_dir
+    self.assertEqual(self.run_info.working_dir, working_dir)
+    self.assertEqual(self.run_info.find("WorkingDir").text, working_dir)
 
-  def test_batch_size(self, setup_default):
+  def test_batch_size(self):
+    self.assertIsNone(self.run_info.find("batchSize"))
+    self.assertIsNone(self.run_info.batch_size)
     batch_size = 10
-    setup_default.batch_size = batch_size
-    assert setup_default.batch_size == batch_size
-    assert setup_default.find("batchSize").text == batch_size
+    self.run_info.batch_size = batch_size
+    self.assertEqual(self.run_info.batch_size, batch_size)
+    self.assertEqual(self.run_info.find("batchSize").text, batch_size)
 
-  def test_add_step_to_sequence(self, setup_from_xml):
-    setup_from_xml.add_step_to_sequence("new_step")
-    sequence = setup_from_xml.find("Sequence")
-    assert sequence.text == ["step1", "step2", "new_step"]
+  def test_internal_parallel(self):
+    self.assertIsNone(self.run_info.find("internalParallel"))
+    self.assertIsNone(self.run_info.internal_parallel)
+    internal_parallel = True
+    self.run_info.internal_parallel = internal_parallel
+    self.assertEqual(self.run_info.internal_parallel, internal_parallel)
+    self.assertEqual(self.run_info.find("internalParallel").text, internal_parallel)
 
-  def test_set_parallel_run_settings(self, setup_default):
+  def test_num_mpi(self):
+    self.assertIsNone(self.run_info.find("NumMPI"))
+    self.assertIsNone(self.run_info.num_mpi)
+    num_mpi = 10
+    self.run_info.num_mpi = num_mpi
+    self.assertEqual(self.run_info.num_mpi, num_mpi)
+    self.assertEqual(self.run_info.find("NumMPI").text, num_mpi)
+
+  def test_sequence(self):
+    self.assertIsNone(self.run_info.find("Sequence"))
+    self.assertListEqual(self.run_info.sequence, [])
+    self.run_info.sequence.append("step1")
+    self.run_info.sequence.extend(["step2", "step3"])
+    self.run_info.sequence.insert(0, "step0")
+    self.assertListEqual(self.run_info.sequence, ["step0", "step1", "step2", "step3"])
+    self.run_info.sequence.clear()
+    self.assertListEqual(self.run_info.sequence, [])
+
+  def test_add_step_obj_to_sequence(self):
+    iostep = IOStep(name="new_step")
+    self.run_info_xml.sequence.append(iostep)
+    self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2", "new_step"])
+    self.assertListEqual(self.run_info_xml.find("Sequence").text, ["step1", "step2", "new_step"])
+
+  def test_set_parallel_run_settings(self):
     parallel_info = {
       "memory": "4g",
       "expectedTime": "72:0:0",
       "clusterParameters": "-P nst"
     }
-    setup_default.set_parallel_run_settings(parallel_info)
+    self.run_info.set_parallel_run_settings(parallel_info)
 
     for k, v in parallel_info.items():
-      node = setup_default.find(k)
-      assert node is not None
-      assert node.text == v
-
-
-class TestSequence:
-  @pytest.fixture(scope="class")
-  def setup_from_xml(self):
-    xml = "<Sequence>step1, step2</Sequence>"
-    root = ET.fromstring(xml)
-    sequence = Sequence.from_xml(root)
-    return sequence
-
-  @pytest.fixture(scope="class")
-  def setup_default(self):
-    return Sequence()
-
-  def test_from_xml(self, setup_from_xml):
-    assert setup_from_xml.tag == "Sequence"
-    assert not setup_from_xml.snippet_class
-    assert setup_from_xml._steps == ["step1", "step2"]
-
-  def test_constructor(self, setup_default):
-    assert setup_default.tag == "Sequence"
-    assert not setup_default.snippet_class
-    assert setup_default._steps == []
-
-  def test_add_step(self, setup_default, setup_iostep):
-    setup_default.add_step("step2")
-    assert setup_default._steps == ["step2"]
-
-    setup_default.add_step("step1", index=0)
-    assert setup_default._steps == ["step1", "step2"]
-
-    setup_default.add_step(setup_iostep)
-    assert setup_default._steps == ["step1", "step2", setup_iostep.name]
-
-  def test_get_step_index(self, setup_from_xml, setup_iostep):
-    assert setup_from_xml.get_step_index("step1") == 0
-    assert setup_from_xml.get_step_index("step2") == 1
-    setup_from_xml.add_step(setup_iostep)
-    assert setup_from_xml.get_step_index(setup_iostep) == 2
+      node = self.run_info.find(k)
+      self.assertIsNotNone(node)
+      self.assertEqual(node.text, v)

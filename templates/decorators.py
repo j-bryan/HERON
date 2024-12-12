@@ -45,7 +45,7 @@ class ListWrapper(list):
     lst.remove(value)
     self._set_list(lst)
 
-  def pop(self, index=None):
+  def pop(self, index=-1):
     return self._get_list().pop(index)
 
   def clear(self):
@@ -59,7 +59,7 @@ class ListWrapper(list):
   def count(self, value):
     return self._get_list().count(value)
 
-  def sort(self, *, key=None, reverse=True):
+  def sort(self, *, key=None, reverse=False):
     lst = self._get_list()
     lst.sort(key=key, reverse=reverse)
     self._set_list(lst)

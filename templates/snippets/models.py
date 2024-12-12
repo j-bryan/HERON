@@ -13,14 +13,9 @@ class RavenCode(RavenSnippet):
   snippet_class = "Models"
   subtype = "RAVEN"
 
-  def set_py_cmd(self, cmd: str) -> None:
-    """
-    Set custom python command for running raven
-    @ In, cmd, str, prepended command
-    @ Out, None
-    """
-    clargs = ET.Element("clargs", {"type": "prepend", "arg": cmd})
-    self.append(clargs)
+  def __init__(self, name: str | None = None):
+    super().__init__(name)
+    self._py_cmd = None
 
   def add_alias(self, name: str, suffix: str) -> None:
     alias_text = f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{name}_{suffix}"  # TODO allow other samplers?
@@ -58,6 +53,19 @@ class RavenCode(RavenSnippet):
   @executable.setter
   def executable(self, value: str) -> None:
     find_node(self, "executable").text = value
+
+  @property
+  def python_command(self) -> str | None:
+    return self._py_cmd
+
+  @python_command.setter
+  def python_command(self, cmd: str) -> None:
+    if self._py_cmd is None:
+      ET.SubElement(self, "clargs", {"type": "prepend", "arg": cmd})
+    else:
+      node = self.find(f"clargs[@type='prepend' and @arg='{cmd}']")
+      node.set("arg", cmd)
+    self._py_cmd = cmd
 
 class GaussianProcessRegressor(RavenSnippet):
   tag = "ROM"
@@ -107,10 +115,7 @@ class GaussianProcessRegressor(RavenSnippet):
 class EnsembleModel(RavenSnippet):
   tag = "EnsembleModel"
   snippet_class = "Models"
-
-  def __init__(self, name: str | None = None) -> None:
-    super().__init__(name)
-    self.set("subType", "")  # subType attribute must be present but must be empty
+  subtype = ""
 
 class EconomicRatioPostProcessor(RavenSnippet):
   tag = "PostProcessor"
@@ -118,6 +123,7 @@ class EconomicRatioPostProcessor(RavenSnippet):
   subtype = "EconomicRatio"
 
   def add_statistic(self, tag: str, prefix: str, variable: str, **kwargs) -> None:
+    # NOTE: This allows duplicate nodes to be added. It's good to avoid that but won't cause anything to crash.
     ET.SubElement(self, tag, prefix=prefix, **kwargs).text = variable
 
 class ExternalModel(RavenSnippet):
@@ -134,8 +140,8 @@ class ExternalModel(RavenSnippet):
     self.text = value
 
 class HeronDispatchModel(ExternalModel):
-  subtype = "HERON.DispatchManager"
   snippet_class = "Models"
+  subtype = "HERON.DispatchManager"
 
 class PickledROM(RavenSnippet):
   tag = "ROM"

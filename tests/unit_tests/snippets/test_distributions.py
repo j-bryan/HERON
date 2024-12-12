@@ -8,8 +8,7 @@ sys.path.append(HERON_LOC)
 from HERON.templates.snippets import distributions
 sys.path.pop()
 
-import pytest
-import importlib
+import unittest
 import xml.etree.ElementTree as ET
 
 # Limited testing of all allowable distributions
@@ -42,75 +41,56 @@ dists = [
   "NDCartesianSpline"
 ]
 
-@pytest.mark.parametrize("dist_name", dists)
-def test_constructed_distributions(dist_name):
-  cls = getattr(distributions, dist_name)
-  assert cls.snippet_class == "Distributions"
-  assert cls.tag == dist_name
+class TestDistributions(unittest.TestCase):
+  def setUp(self):
+    self.dist_classes = {dist_name: getattr(distributions, dist_name) for dist_name in dists}
 
+  def test_constructed_distributions(self):
+    for dist_name, cls in self.dist_classes.items():
+      self.assertEqual(cls.snippet_class, "Distributions")
+      self.assertEqual(cls.tag, dist_name)
 
-@pytest.mark.parametrize("dist_name", dists)
-def test_from_xml(dist_name):
-  cls = getattr(distributions, dist_name)
-  xml = f"<{dist_name} name='new_dist'/>"
-  root = ET.fromstring(xml)
-  dist = cls.from_xml(root)
+  def test_from_xml(self):
+    for dist_name, cls in self.dist_classes.items():
+      xml = f"<{dist_name} name='new_dist'/>"
+      root = ET.fromstring(xml)
+      dist = cls.from_xml(root)
 
-  assert dist.snippet_class == "Distributions"
-  assert dist.tag == dist_name
-  assert dist.name == "new_dist"
+      self.assertEqual(dist.snippet_class, "Distributions")
+      self.assertEqual(dist.tag, dist_name)
+      self.assertEqual(dist.name, "new_dist")
 
 # Explicit testing of just a couple of the most common distributions we expect to see in HERON.
 
-class TestUniform:
-  @pytest.fixture(scope="class")
-  def setup_default(self):
-    return distributions.Uniform("unif_dist")
+class TestUniform(unittest.TestCase):
+  def setUp(self):
+    self.dist = distributions.Uniform()
 
-  @pytest.fixture(scope="class")
-  def setup_from_xml(self):
-    xml = """
-    <Uniform name="unif_dist">
-      <lowerBound>-1</lowerBound>
-      <upperBound>3</upperBound>
-    </Uniform>
-    """
-    root = ET.fromstring(xml)
-    return distributions.Uniform.from_xml(root)
+  def test_bounds(self):
+    self.assertIsNone(self.dist.lower_bound)
+    self.assertIsNone(self.dist.upper_bound)
 
-  def test_from_xml(self, setup_from_xml):
-    assert setup_from_xml.lower_bound == -1
-    assert setup_from_xml.upper_bound == 3
+    self.dist.lower_bound = 0
+    self.dist.upper_bound = 1
 
-  def test_bounds(self, setup_default):
-    setup_default.lower_bound = 0
-    assert setup_default.find("lowerBound").text == 0
-    setup_default.upper_bound = 1
-    assert setup_default.find("upperBound").text == 1
+    self.assertEqual(self.dist.lower_bound, 0)
+    self.assertEqual(self.dist.upper_bound, 1)
+    self.assertEqual(self.dist.find("lowerBound").text, 0)
+    self.assertEqual(self.dist.find("upperBound").text, 1)
 
 
-class TestNormal:
-  @pytest.fixture(scope="class")
-  def setup_default(self):
-    return distributions.Normal("norm_dist")
+class TestNormal(unittest.TestCase):
+  def setUp(self):
+    self.dist = distributions.Normal()
 
-  @pytest.fixture(scope="class")
-  def setup_from_xml(self):
-    xml = """
-    <Normal name="norm_dist">
-      <mean>0</mean>
-      <sigma>1</sigma>
-    </Normal>
-    """
-    root = ET.fromstring(xml)
-    return distributions.Normal.from_xml(root)
+  def test_params(self):
+    self.assertIsNone(self.dist.mean)
+    self.assertIsNone(self.dist.sigma)
 
-  def test_from_xml(self, setup_from_xml):
-    assert setup_from_xml.mean == 0
-    assert setup_from_xml.sigma == 1
+    self.dist.mean = 0
+    self.dist.sigma = 1
 
-  def test_params(self, setup_default):
-    setup_default.mean = -1
-    assert setup_default.find("mean").text == -1
-    setup_default.sigma = 10
-    assert setup_default.find("sigma").text == 10
+    self.assertEqual(self.dist.mean, 0)
+    self.assertEqual(self.dist.sigma, 1)
+    self.assertEqual(self.dist.find("mean").text, 0)
+    self.assertEqual(self.dist.find("sigma").text, 1)

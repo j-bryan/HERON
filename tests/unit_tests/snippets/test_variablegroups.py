@@ -9,44 +9,46 @@ print(sys.path)
 from HERON.templates.snippets import VariableGroup
 sys.path.pop()
 
-import pytest
+import unittest
 import xml.etree.ElementTree as ET
 
 
-class TestVariableGroup:
-  @pytest.fixture(scope="class")
-  def setup_default(self):
-    return VariableGroup(name="GRO_group")
+class TestVariableGroup(unittest.TestCase):
+  def setUp(self):
+    # __init__ constructor
+    self.group = VariableGroup(name="GRO_group")
 
-  @pytest.fixture(scope="class")
-  def setup_from_xml(self):
+    # from_xml constructor
     xml = "<Group name='GRO_group'>var1, var2,var3</Group>"  # NOTE: intentionally bad spacing
     root = ET.fromstring(xml)
-    return VariableGroup.from_xml(root)
+    self.group_xml = VariableGroup.from_xml(root)
 
-  def test_default(self, setup_default):
-    assert setup_default.snippet_class == "VariableGroups"
-    assert setup_default.tag == "Group"
-    assert setup_default.name == "GRO_group"
-    assert setup_default._variables == []
-    assert setup_default.variables == []
-    assert setup_default.text is None
+  def test_from_xml(self):
+    self.assertEqual(self.group_xml.snippet_class, "VariableGroups")
+    self.assertEqual(self.group_xml.tag, "Group")
+    self.assertEqual(self.group_xml.name, "GRO_group")
+    self.assertListEqual(self.group_xml.variables, ["var1", "var2", "var3"])
+    self.assertListEqual(self.group_xml.text, ["var1", "var2", "var3"])
 
-  def test_from_xml(self, setup_from_xml):
-    assert setup_from_xml.snippet_class == "VariableGroups"
-    assert setup_from_xml.tag == "Group"
-    assert setup_from_xml.name == "GRO_group"
-    assert setup_from_xml._variables == ["var1", "var2", "var3"]
-    assert setup_from_xml.variables == ["var1", "var2", "var3"]
-    assert setup_from_xml.text == ["var1", "var2", "var3"]
+  def test_default(self):
+    self.assertEqual(self.group.snippet_class, "VariableGroups")
+    self.assertEqual(self.group.tag, "Group")
+    self.assertEqual(self.group.name, "GRO_group")
+    self.assertListEqual(self.group.variables, [])
+    self.assertIsNone(self.group.text)
 
-  def test_set_variables(self, setup_default):
-    setup_default.variables = ["var1", "var2"]
-    assert setup_default._variables == ["var1", "var2"]
-    assert setup_default.text == ["var1", "var2"]
+  def test_set_variables(self):
+    self.group.variables = ["var1", "var2"]
+    self.assertListEqual(self.group.text, ["var1", "var2"])
 
-    setup_default.variables.append("var3")
-    assert setup_default._variables == ["var1", "var2", "var3"]
+    self.group.variables.append("var3")
+    self.assertListEqual(self.group.text, ["var1", "var2", "var3"])
 
-    setup_default.variables.extend(["var4"])
-    assert setup_default._variables == ["var1", "var2", "var3", "var4"]
+    self.group.variables.extend(["var4"])
+    self.assertListEqual(self.group.text, ["var1", "var2", "var3", "var4"])
+
+    self.group.variables.insert(0, "var0")
+    self.assertListEqual(self.group.text, ["var0", "var1", "var2", "var3", "var4"])
+
+    self.group.variables.clear()
+    self.assertListEqual(self.group.text, [])

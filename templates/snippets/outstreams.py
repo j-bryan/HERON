@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from ..utils import find_node
 from ..decorators import listproperty
 from .base import RavenSnippet
+from .dataobjects import DataObject
 
 
 class OutStream(RavenSnippet):
@@ -20,24 +21,14 @@ class OutStream(RavenSnippet):
   @property
   def source(self) -> str | None:
     node = self.find("source")
-    return None if node is None else node.text
+    return None if node is None or not node.text else str(node.text)
 
   @source.setter
-  def source(self, value: str) -> None:
+  def source(self, value: str | DataObject) -> None:
     find_node(self, "source").text = value
 
 class PrintOutStream(OutStream):
   tag = "Print"
-
-  @classmethod
-  def from_xml(cls, node: ET.Element) -> "PrintOutStream":
-    outstream = cls(node.get("name"))
-    outstream.attrib.update(node.attrib)
-    for sub in node:
-      if sub.tag == "type":
-        continue
-      outstream.append(sub)
-    return outstream
 
   def __init__(self, name: str | None = None) -> None:
     super().__init__(name)
@@ -83,7 +74,7 @@ class HeronDispatchPlot(OutStream):
 
   @listproperty
   def signals(self) -> list[str]:
-    node = self.find("macro_variable")
+    node = self.find("signals")
     return getattr(node, "text", []) or []
 
   @signals.setter

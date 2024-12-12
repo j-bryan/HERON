@@ -143,7 +143,7 @@ class OuterTemplate(RavenTemplate):
 
     # custom python command for running raven (for example, "coverage run")
     if cmd := case.get_py_cmd_for_raven():
-      raven.set_py_cmd(cmd)
+      raven.python_command = cmd
 
     # Add variable aliases for Inner
     for component in components:

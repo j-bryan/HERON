@@ -38,7 +38,7 @@ class SampledVariable(RavenSnippet):
 
   @distribution.setter
   def distribution(self, value: Distribution) -> None:
-    find_node(self, "distribution").text = value
+    find_node(self, "distribution").text = str(value)
 
 
 class Sampler(RavenSnippet):

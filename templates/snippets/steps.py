@@ -5,10 +5,6 @@ class Step(RavenSnippet):
   snippet_class = "Steps"
   _allowed_subs = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
 
-  def __init__(self, name: str | None = None) -> None:
-    # FIXME: step attribute options not exposed in HERON input
-    super().__init__(name)
-
   def _add_item(self, tag: str, entity: RavenSnippet) -> None:
     if tag not in self._allowed_subs:
       raise ValueError(f"Step type {self.tag} does not accept subelements with tag {tag}. Allowed: {self._allowed_subs}.")
@@ -47,17 +43,6 @@ class Step(RavenSnippet):
 
   def add_output(self, entity: RavenSnippet) -> None:
     self._add_item("Output", entity)
-
-  ###################################################################
-  # Data object input/output getters for determining order of steps #
-  ###################################################################
-  def get_inputs(self) -> list[str]:
-    inputs = [node.text for node in self if node.tag == "Input"]
-    return inputs
-
-  def get_outputs(self) -> list[str]:
-    outputs = [node.text for node in self if node.tag in ["Outputs", "SolutionExport"]]
-    return outputs
 
 
 class IOStep(Step):

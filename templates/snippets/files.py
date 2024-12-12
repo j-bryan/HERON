@@ -19,17 +19,17 @@ class File(RavenSnippet):
     return node
 
   @property
-  def type(self) -> str:
-    return self.get("type", "")
+  def type(self) -> str | None:
+    return self.get("type", None)
 
   @type.setter
   def type(self, value: str) -> None:
-    self.set("type", value)
+    self.set("type", str(value))
 
   @property
-  def path(self) -> str:
-    return self.text or ""
+  def path(self) -> str | None:
+    return self.text
 
   @path.setter
   def path(self, value: str) -> None:
-    self.text = value
+    self.text = str(value)

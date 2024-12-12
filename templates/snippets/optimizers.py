@@ -50,7 +50,7 @@ class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance st
 
   @target_evaluation.setter
   def target_evaluation(self, value: DataObject) -> None:
-    if not isinstance(value, DataObject):
+    if not getattr(value, "snippet_class", None) == "DataObjects":
       raise TypeError(f"Optimizer evaluation target must be set with a DataObject object. Received '{type(value)}'")
     assemb = value.to_assembler_node("TargetEvaluation")
     # Copy assembler node info over to the existing TargetEvaluation node
@@ -101,7 +101,11 @@ class BayesianOptimizer(Optimizer):
 
     # acquisition function
     acquisition = self.find("Acquisition")
-    acq_func_name = bo_settings.get("acquisition", "ExpectedImprovement")
+    if len(acquisition) > 0:
+      acquisition.clear()  # drops all children, tag, text, attribs, etc.
+      acquisition.tag = "Acquisition"  # replace cleared tag
+    default_acq_func = "ExpectedImprovement"
+    acq_func_name = bo_settings.get("acquisition", default_acq_func)
     acq_funcs = {
       "ExpectedImprovement": ExpectedImprovement,
       "ProbabilityOfImprovement": ProbabilityOfImprovement,
@@ -109,7 +113,7 @@ class BayesianOptimizer(Optimizer):
     }
     try:
       # FIXME: No acquisition function parameters are exposed to the HERON user
-      acq_func = acq_funcs.get(acq_func_name)()
+      acq_func = acq_funcs.get(acq_func_name, default_acq_func)()
       acquisition.append(acq_func)
     except KeyError:
       raise ValueError(f"Unrecognized acquisition function {acq_func_name}. Allowed: {acq_funcs.keys()}")
@@ -121,7 +125,7 @@ class BayesianOptimizer(Optimizer):
 
     # modelSelection
     model_selection = find_node(self, "ModelSelection")
-    for k, v in bo_settings.get("ModelSelection", {}):
+    for k, v in bo_settings.get("ModelSelection", {}).items():
       find_node(model_selection, k).text = v
 
   def set_sampler(self, sampler: Sampler) -> None:
@@ -217,10 +221,11 @@ class GradientDescent(Optimizer):
   def set_opt_settings(self, opt_settings: dict) -> None:
     super().set_opt_settings(opt_settings)
 
-    gd_settings = opt_settings["algorithm"]["GradientDescent"]
+    try:
+      gd_settings = opt_settings["algorithm"]["GradientDescent"]
+    except KeyError:
+      return  # nothing else to do
 
     # stepSize settings
-    step_size = find_node(self, "stepSize")
-    grad_history = find_node(step_size, "GradientHistory")
-    for name in gd_settings.keys() & {"growthFactor", "shrinkFactor", "initStepScale"}:
-      find_node(grad_history, name).text = gd_settings[name]
+    for name in gd_settings.keys() & {"growthFactor", "shrinkFactor", "initialStepScale"}:
+      find_node(self, f"stepSize/GradientHistory/{name}").text = gd_settings[name]

@@ -1,0 +1,138 @@
+[Tests]
+  [./RavenSnippet]
+    type = Unittest
+    input = 'test_base.py'
+  [../]
+  [./databases_NetCDF]
+    type = Unittest
+    input = 'test_databases.TestNetCDF'
+  [../]
+  [./databases_HDF5]
+    type = Unittest
+    input = 'test_databases.TestHDF5'
+  [../]
+  [./dataobjects_PointSet]
+    type = Unittest
+    input = 'test_dataobjects.TestPointSet'
+  [../]
+  [./dataobjects_HistorySet]
+    type = Unittest
+    input = 'test_dataobjects.TestHistorySet'
+  [../]
+  [./dataobjects_DataSet]
+    type = Unittest
+    input = 'test_dataobjects.TestDataSet'
+  [../]
+  [./distributions_ConstructedDistributions]
+    type = Unittest
+    input = 'test_distributions.TestDistributions'
+  [../]
+  [./distributions_Uniform]
+    type = Unittest
+    input = 'test_distributions.TestUniform'
+  [../]
+  [./distributions_Normal]
+    type = Unittest
+    input = 'test_distributions.TestNormal'
+  [../]
+  [./File]
+    type = Unittest
+    input = 'test_files.TestFile'
+  [../]
+  [./models_RavenCode]
+    type = Unittest
+    input = 'test_models.TestRavenCode'
+  [../]
+  [./models_GaussianProcessRegressor]
+    type = Unittest
+    input = 'test_models.TestGaussianProcessRegressor'
+  [../]
+  [./models_EnsembleModel]
+    type = Unittest
+    input = 'test_models.TestEnsembleModel'
+  [../]
+  [./models_EconomicRatioPostProcessor]
+    type = Unittest
+    input = 'test_models.TestEconomicRatioPostProcessor'
+  [../]
+  [./models_ExternalModel]
+    type = Unittest
+    input = 'test_models.TestExternalModel'
+  [../]
+  [./models_HeronDispatchModel]
+    type = Unittest
+    input = 'test_models.TestHeronDispatchModel'
+  [../]
+  [./models_PickledROM]
+    type = Unittest
+    input = 'test_models.TestPickledROM'
+  [../]
+  [./optimizers_BayesianOptimizer]
+    type = Unittest
+    input = 'test_optimizers.TestBayesianOptimizer'
+  [../]
+  [./optimizers_GradientDescent]
+    type = Unittest
+    input = 'test_optimizers.TestGradientDescent'
+  [../]
+  [./outstreams_PrintOutStream]
+    type = Unittest
+    input = 'test_outstreams.TestPrintOutStream'
+  [../]
+  [./outstreams_OptPathPlot]
+    type = Unittest
+    input = 'test_outstreams.TestOptPathPlot'
+  [../]
+  [./outstreams_HeronDispatchPlot]
+    type = Unittest
+    input = 'test_outstreams.TestHeronDispatchPlot'
+  [../]
+  [./outstreams_TealCashFlowPlot]
+    type = Unittest
+    input = 'test_outstreams.TestTealCashFlowPlot'
+  [../]
+  [./RunInfo]
+    type = Unittest
+    input = 'test_runinfo.py'
+  [../]
+  [./samplers_SampledVariable]
+    type = Unittest
+    input = 'test_samplers.TestSampledVariable'
+  [../]
+  [./samplers_Sampler]
+    type = Unittest
+    input = 'test_samplers.TestSamplerBase'
+  [../]
+  [./samplers_Grid]
+    type = Unittest
+    input = 'test_samplers.TestGrid'
+  [../]
+  [./samplers_MonteCarlo]
+    type = Unittest
+    input = 'test_samplers.TestMonteCarlo'
+  [../]
+  [./samplers_Stratified]
+    type = Unittest
+    input = 'test_samplers.TestStratified'
+  [../]
+  [./samplers_CustomSampler]
+    type = Unittest
+    input = 'test_samplers.TestCustomSampler'
+  [../]
+  [./steps_MultiRun]
+    type = Unittest
+    input = 'test_steps.TestMultiRun'
+  [../]
+  [./steps_PostProcess]
+    type = Unittest
+    input = 'test_steps.TestPostProcess'
+  [../]
+  [./steps_IOStep]
+    type = Unittest
+    input = 'test_steps.TestIOStep'
+  [../]
+  [./VariableGroup]
+    type = Unittest
+    input = 'test_variablegroups.py'
+  [../]
+[]
