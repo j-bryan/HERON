@@ -220,6 +220,12 @@ class RavenTemplate(Template):
     results_data.outputs = [results_vargroup]
     self._add_snippet(results_data)
 
+    # If there are any case labels, make a variableg group for those and add it to the "grid" PointSet
+    if labels := case.get_labels():
+      vargroup = self._create_case_labels_vargroup(labels)
+      self._add_snippet(vargroup)
+      results_data.outputs.append(vargroup.name)
+
     # Define grid sampler and build the variables and their distributions that it'll sample
     sampler = Grid("grid")
     self._add_snippet(sampler)
@@ -423,6 +429,11 @@ class RavenTemplate(Template):
     pass
 
   # VariableGroups
+  def _create_case_labels_vargroup(self, labels: dict, name: str = "GRO_case_labels") -> VariableGroup:
+    group = VariableGroup(name)
+    group.variables.extend(map(lambda label: f"{label}_label", labels.keys()))
+    return group
+
   def _get_capacity_vars(self, case: Case, components: list[Component]) -> list[str]:
     """
     Collects component capacity and dispatch opt variable names to form a variable group

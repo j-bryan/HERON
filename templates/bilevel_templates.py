@@ -309,6 +309,7 @@ class InnerTemplate(RavenTemplate):
 
     mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
     vg_case_labels = VariableGroup("GRO_case_labels")
+    self._add_snippet(vg_case_labels)
     self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_case_labels.name)
     self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_case_labels.name)
     for k, label_val in case_labels.items():
