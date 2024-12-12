@@ -6,10 +6,21 @@
     <batchSize>1</batchSize>
   </RunInfo>
 
+  <Steps/>
+
+  <Files>
+    <Input name="inner_workflow" type='raven'>../inner.xml</Input>
+    <Input name="heron_lib">../heron.lib</Input>
+  </Files>
+
   <VariableGroups>
     <Group name='GRO_capacities'></Group>
     <Group name='GRO_outer_results'></Group>
   </VariableGroups>
+
+  <DataObjects/>
+
+  <Databases/>
 
   <Models>
     <Code name='raven' subType='RAVEN'>
@@ -22,8 +33,11 @@
     </Code>
   </Models>
 
-  <Files>
-    <Input name="inner_workflow" type='raven'>../inner.xml</Input>
-    <Input name="heron_lib">../heron.lib</Input>
-  </Files>
+  <Distributions/>
+
+  <Samplers/>
+
+  <Optimizers/>
+
+  <OutStreams/>
 </Simulation>

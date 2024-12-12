@@ -47,3 +47,19 @@ class TestFile(unittest.TestCase):
     self.file.path = path
     self.assertEqual(self.file.path, path)
     self.assertEqual(self.file.text, path)
+
+  def test_to_assembler_node(self):
+    xml1 = """<Input name="inner_workflow" type="raven">../inner.xml</Input>"""
+    file1 = File.from_xml(ET.fromstring(xml1))
+    assemb1 = file1.to_assembler_node("File")
+    self.assertEqual(assemb1.tag, "File")
+    self.assertDictEqual(assemb1.attrib, {"class": "Files", "type": "raven"})
+    self.assertEqual(assemb1.text, "inner_workflow")
+
+    xml2 = """<Input name="heron_lib">../heron.lib</Input>"""
+    file2 = File.from_xml(ET.fromstring(xml2))
+    assemb2 = file2.to_assembler_node("File")
+    self.assertEqual(assemb2.tag, "File")
+    # getting this "type" value right is a deviation from the usual RavenSnippet.to_assemb_node() method
+    self.assertDictEqual(assemb2.attrib, {"class": "Files", "type": ""})
+    self.assertEqual(assemb2.text, "heron_lib")

@@ -15,7 +15,7 @@ class File(RavenSnippet):
   def to_assembler_node(self, tag: str) -> ET.Element:
     node = super().to_assembler_node(tag)
     # Type is set as a node attribute and is not the main node tag, in this case
-    node.set("type", self.type)  # Need empty string for type if not set when creating assembler node
+    node.set("type", self.type or "")  # Need empty string for type if not set when creating assembler node
     return node
 
   @property

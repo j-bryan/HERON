@@ -132,6 +132,11 @@ class RavenTemplate(Template):
     # list as needed, then the list can be converted to a string only now at write time.
     stringify_node_values(self._template)
 
+    # Remove any unused top-level nodes (Models, Samplers, etc.) to keep things looking clean
+    for node in self._template:
+      if len(node) == 0:
+        self._template.remove(node)
+
     file_name = os.path.abspath(os.path.join(destination, self.write_name))
 
     msg_format = 'Wrote "{1}" to "{0}/"'

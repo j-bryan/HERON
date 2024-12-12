@@ -23,6 +23,10 @@
     </IOStep>
   </Steps>
 
+  <Files>
+    <Input name="libs">../../heron.lib</Input>
+  </Files>
+
   <VariableGroups>
     <Group name='GRO_dispatch'           >GRO_dispatch_in, GRO_dispatch_out</Group>
     <Group name='GRO_dispatch_in'        >GRO_dispatch_in_scalar, GRO_dispatch_in_Time</Group>
@@ -64,6 +68,8 @@
     </PointSet>
   </DataObjects>
 
+  <Databases/>
+
   <Models>
     <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
       <variables>GRO_dispatch, GRO_armasamples</variables>
@@ -80,14 +86,14 @@
     </PostProcessor>
   </Models>
 
-  <Files>
-    <Input name="libs">../../heron.lib</Input>
-  </Files>
+  <Distributions/>
 
   <Samplers>
     <MonteCarlo name='mc_arma_dispatch'>
       <constant name='scaling'>1.0</constant>
     </MonteCarlo>
   </Samplers>
+
+  <OutStreams/>
 
 </Simulation>

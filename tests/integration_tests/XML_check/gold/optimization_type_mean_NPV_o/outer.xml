@@ -6,10 +6,44 @@
     <batchSize>1</batchSize>
   </RunInfo>
 
+  <Steps>
+    <MultiRun name="optimize">
+      <Input class="Files" type="raven">inner_workflow</Input>
+      <Input class="Files" type="">heron_lib</Input>
+      <Input class="Files" type="">transfers</Input>
+      <Model class="Models" type="Code">raven</Model>
+      <Optimizer class="Optimizers" type="GradientDescent">cap_opt</Optimizer>
+      <SolutionExport class="DataObjects" type="PointSet">opt_soln</SolutionExport>
+      <Output class="DataObjects" type="PointSet">opt_eval</Output>
+    </MultiRun>
+    <IOStep name="plot">
+      <Input class="DataObjects" type="PointSet">opt_soln</Input>
+      <Output class="OutStreams" type="Plot">opt_path</Output>
+      <Output class="OutStreams" type="Print">opt_soln</Output>
+    </IOStep>
+  </Steps>
+
+  <Files>
+    <Input name="inner_workflow" type="raven">../inner.xml</Input>
+    <Input name="heron_lib">../heron.lib</Input>
+    <Input name="transfers">../%HERON_DATA%/XML_check/transfers.py</Input>
+  </Files>
+
   <VariableGroups>
     <Group name="GRO_capacities">steamer_capacity, generator_capacity, electr_market_capacity, electr_flex_capacity</Group>
     <Group name="GRO_outer_results">mean_NPV, std_NPV, med_NPV, mean_TotalActivity__steamer__production__steam, mean_TotalActivity__generator__production__electricity, mean_TotalActivity__generator__production__steam, mean_TotalActivity__electr_market__production__electricity, mean_TotalActivity__electr_flex__production__electricity, std_TotalActivity__steamer__production__steam, std_TotalActivity__generator__production__electricity, std_TotalActivity__generator__production__steam, std_TotalActivity__electr_market__production__electricity, std_TotalActivity__electr_flex__production__electricity, med_TotalActivity__steamer__production__steam, med_TotalActivity__generator__production__electricity, med_TotalActivity__generator__production__steam, med_TotalActivity__electr_market__production__electricity, med_TotalActivity__electr_flex__production__electricity</Group>
   </VariableGroups>
+
+  <DataObjects>
+    <PointSet name="opt_soln">
+      <Input>trajID</Input>
+      <Output>iteration, accepted, GRO_capacities, GRO_outer_results</Output>
+    </PointSet>
+    <PointSet name="opt_eval">
+      <Input>GRO_capacities</Input>
+      <Output>GRO_outer_results</Output>
+    </PointSet>
+  </DataObjects>
 
   <Models>
     <Code subType="RAVEN" name="raven">
@@ -27,22 +61,16 @@
     </Code>
   </Models>
 
-  <Files>
-    <Input name="inner_workflow" type="raven">../inner.xml</Input>
-    <Input name="heron_lib">../heron.lib</Input>
-    <Input name="transfers">../%HERON_DATA%/XML_check/transfers.py</Input>
-  </Files>
-
-  <DataObjects>
-    <PointSet name="opt_soln">
-      <Input>trajID</Input>
-      <Output>iteration, accepted, GRO_capacities, GRO_outer_results</Output>
-    </PointSet>
-    <PointSet name="opt_eval">
-      <Input>GRO_capacities</Input>
-      <Output>GRO_outer_results</Output>
-    </PointSet>
-  </DataObjects>
+  <Distributions>
+    <Uniform name="steamer_capacity_dist">
+      <lowerBound>1.0</lowerBound>
+      <upperBound>10.0</upperBound>
+    </Uniform>
+    <Uniform name="electr_flex_capacity_dist">
+      <lowerBound>-2050.0</lowerBound>
+      <upperBound>-2000.0</upperBound>
+    </Uniform>
+  </Distributions>
 
   <Optimizers>
     <GradientDescent name="cap_opt">
@@ -84,34 +112,6 @@
       <TargetEvaluation class="DataObjects" type="PointSet">opt_eval</TargetEvaluation>
     </GradientDescent>
   </Optimizers>
-
-  <Distributions>
-    <Uniform name="steamer_capacity_dist">
-      <lowerBound>1.0</lowerBound>
-      <upperBound>10.0</upperBound>
-    </Uniform>
-    <Uniform name="electr_flex_capacity_dist">
-      <lowerBound>-2050.0</lowerBound>
-      <upperBound>-2000.0</upperBound>
-    </Uniform>
-  </Distributions>
-
-  <Steps>
-    <MultiRun name="optimize">
-      <Input class="Files" type="raven">inner_workflow</Input>
-      <Input class="Files" type="">heron_lib</Input>
-      <Input class="Files" type="">transfers</Input>
-      <Model class="Models" type="Code">raven</Model>
-      <Optimizer class="Optimizers" type="GradientDescent">cap_opt</Optimizer>
-      <SolutionExport class="DataObjects" type="PointSet">opt_soln</SolutionExport>
-      <Output class="DataObjects" type="PointSet">opt_eval</Output>
-    </MultiRun>
-    <IOStep name="plot">
-      <Input class="DataObjects" type="PointSet">opt_soln</Input>
-      <Output class="OutStreams" type="Plot">opt_path</Output>
-      <Output class="OutStreams" type="Print">opt_soln</Output>
-    </IOStep>
-  </Steps>
 
   <OutStreams>
     <Plot name="opt_path" subType="OptPath">
