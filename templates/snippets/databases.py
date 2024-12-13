@@ -1,4 +1,4 @@
-from ..utils import find_node
+from ..xml_utils import find_node
 from ..decorators import listproperty
 from .base import RavenSnippet
 

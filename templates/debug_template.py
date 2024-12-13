@@ -14,7 +14,7 @@ from .snippets.models import EconomicRatioPostProcessor, EnsembleModel
 from .snippets.outstreams import PrintOutStream, HeronDispatchPlot, TealCashFlowPlot
 from .snippets.samplers import Sampler, MonteCarlo, SampledVariable
 
-from .utils import get_capacity_vars, get_component_activity_vars
+from .naming_utils import get_capacity_vars, get_component_activity_vars
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 import HERON.src._utils as hutils
@@ -190,7 +190,7 @@ class DebugTemplate(RavenTemplate):
     self._add_snippet(pp_step)
 
     # We need to be careful to add the "summarize" step after the "debug" MultiRun
-    debug_idx = self._get_step_index(multirun)
+    debug_idx = self._template.find("RunInfo").sequence.index(multirun.name)
     self._add_step_to_sequence(pp_step, index=debug_idx+1)
 
     return mc

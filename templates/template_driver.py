@@ -14,6 +14,7 @@ import itertools as it
 import numpy as np
 import dill as pk
 
+from .types import HeronCase, Component, Source
 from .raven_template import RavenTemplate
 from .bilevel_templates import BilevelTemplate
 from .flat_templates import FlatMultiConfigTemplate, FlatMultiDispatchTemplate
@@ -39,12 +40,12 @@ class TemplateDriver(Base):
   # Set naming conventions used throughout the templates
   def __init__(self):
     super().__init__()
-    self._template = None  # RavenTemplate
+    self._template = None  # type: RavenTemplate
 
   ##############
   # Public API #
   ##############
-  def create_workflow(self, case, components, sources) -> list[RavenTemplate]:
+  def create_workflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> list[RavenTemplate]:
     if any(s.is_type("CSV") for s in sources):
       raise NotImplementedError
     # Flat or bilevel template?
@@ -61,7 +62,7 @@ class TemplateDriver(Base):
     self._template.loadTemplate()
     self._template.createWorkflow(case, components, sources)
 
-  def write_workflow(self, loc, case, components, sources):
+  def write_workflow(self, loc: str, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     print('========================')
     print('HERON: writing files ...')
     print('========================')
@@ -71,19 +72,19 @@ class TemplateDriver(Base):
   # Utility methods #
   ###################
   @staticmethod
-  def _all_capacities_fixed(components) -> bool:
+  def _all_capacities_fixed(components: list[Component]) -> bool:
     """ Checks if all components have fixed capacities """
     # TODO
     return False
 
   @staticmethod
-  def _uses_one_history(case, sources) -> bool:
+  def _uses_one_history(case: HeronCase, sources: list[Source]) -> bool:
     """ Checks if only one history is used, whether it is fixed from a file or is sampled from a ROM """
     # TODO
     return False
 
   @staticmethod
-  def _has_uncertain_variable_costs(case, comopnents, sources) -> bool:
+  def _has_uncertain_variable_costs(case: HeronCase, components: list[Component], sources: list[Source]) -> bool:
     """ Checks if any components are dispatchable and have an uncertain variable cost """
     # TODO
     return True

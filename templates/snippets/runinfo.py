@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet
 from .steps import Step
-from ..utils import find_node, merge_trees
+from ..xml_utils import find_node, merge_trees
 from ..decorators import listproperty
 
 

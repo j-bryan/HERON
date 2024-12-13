@@ -51,7 +51,6 @@
         <input source="../write_inner.py" />
       </conversion>
       <alias variable="denoises" type="input">Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises</alias>
-      <clargs type="prepend" arg="/Users/bryaja/miniforge3/envs/raven_libraries/bin/python" />
       <alias variable="source_capacity" type="input">Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:source_capacity</alias>
       <alias variable="sink_capacity" type="input">Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:sink_capacity</alias>
       <alias variable="import_capacity" type="input">Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:import_capacity</alias>

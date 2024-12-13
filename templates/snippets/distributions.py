@@ -2,7 +2,7 @@ import keyword
 import re
 import xml.etree.ElementTree as ET
 
-from ..utils import find_node
+from ..xml_utils import find_node
 from .base import RavenSnippet
 
 

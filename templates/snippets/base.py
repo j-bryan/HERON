@@ -1,7 +1,7 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from ..utils import merge_trees
+from ..xml_utils import merge_trees
 
 class RavenSnippet(ET.Element):
   """

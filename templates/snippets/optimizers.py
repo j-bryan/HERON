@@ -4,7 +4,7 @@ Optimization features
 @author: Jacob Bryan (@j-bryan)
 @date: 2024-11-08
 """
-from ..utils import find_node
+from ..xml_utils import find_node
 from .base import RavenSnippet
 from .samplers import Sampler
 from .dataobjects import DataObject

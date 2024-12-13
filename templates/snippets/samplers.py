@@ -6,7 +6,7 @@ Sampler features
 """
 import xml.etree.ElementTree as ET
 
-from ..utils import find_node
+from ..xml_utils import find_node
 from .base import RavenSnippet
 from .distributions import Distribution
 
@@ -95,6 +95,11 @@ class MonteCarlo(Sampler):
 
 class Stratified(Sampler):
   tag = "Stratified"
+
+  def __init__(self, name: str | None = None, settings: dict = {}) -> None:
+    super().__init__(name, settings)
+    # Must have samplerInit node
+    ET.SubElement(self, "samplerInit")
 
 class CustomSampler(Sampler):
   tag = "CustomSampler"

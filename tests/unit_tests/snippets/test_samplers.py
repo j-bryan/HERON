@@ -98,6 +98,9 @@ class TestStratified(unittest.TestCase):
   def test_tag(self):
     self.assertEqual(self.sampler.tag, "Stratified")
 
+  def test_has_samplerinit(self):
+    self.assertIsNotNone(self.sampler.find("samplerInit"))
+
 
 class TestCustomSampler(unittest.TestCase):
   def setUp(self):
