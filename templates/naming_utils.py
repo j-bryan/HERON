@@ -128,8 +128,6 @@ def get_capacity_vars(components, name_template, *, debug=False) -> dict[str, An
     if capacity.is_parametric():
       cap_name = name_template.format(unit=name, feature='capacity')
       values = capacity.get_value(debug=debug)
-      if isinstance(values, list) and debug:  # no debug value was provided, so use the first in the list
-        values = values[0]
       vars[cap_name] = values
     elif capacity.type in ['StaticHistory', 'SyntheticHistory', 'Function', 'Variable']:
       # capacity is limited by a signal, so it has to be handled in the dispatch; don't include it here.

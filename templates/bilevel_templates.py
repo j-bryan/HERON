@@ -193,6 +193,9 @@ class InnerTemplate(RavenTemplate):
 
     # Determine which variables are sampled by the Monte Carlo sampler
     mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
+    # default sampler init
+    mc.init_seed = 42
+    mc.init_limit = 3
     #   - component capacities (constants)
     #     - add variables to GRO_capacities
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")

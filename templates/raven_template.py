@@ -613,7 +613,7 @@ class RavenTemplate(Template):
     # Make Distribution and SampledVariable objects for sampling dispatch variables
     for key, value in case.dispatch_vars.items():
       var_name = self.namingTemplates["variable"].format(unit=key, feature="dispatch")
-      vals = value.get_value(debug=case.debug["enabled"])  # FIXME refactor into separate debug mode
+      vals = value.get_value(debug=case.debug["enabled"])
       if isinstance(vals, list):
         sampled_var = self._create_new_sampled_capacity(var_name, vals)
         sampled_variables[sampled_var] = vals

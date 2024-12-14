@@ -86,10 +86,6 @@ class TestMonteCarlo(unittest.TestCase):
   def test_tag(self):
     self.assertEqual(self.sampler.tag, "MonteCarlo")
 
-  def test_default_sampler_init(self):
-    self.assertEqual(self.sampler.find("samplerInit/initialSeed").text, 42)
-    self.assertEqual(self.sampler.find("samplerInit/limit").text, 3)
-
 
 class TestStratified(unittest.TestCase):
   def setUp(self):

@@ -88,11 +88,6 @@ class Grid(Sampler):
 class MonteCarlo(Sampler):
   tag = "MonteCarlo"
 
-  def __init__(self, name: str | None = None) -> None:
-    super().__init__(name)
-    self.init_seed = 42
-    self.init_limit = 3
-
 class Stratified(Sampler):
   tag = "Stratified"
 

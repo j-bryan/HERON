@@ -52,8 +52,10 @@ class DebugTemplate(RavenTemplate):
     sampler.init_limit = case.get_num_samples()
 
     # Add capacities to sampler as constants
-    capacity_vars = get_capacity_vars(components, self.namingTemplates["variable"], debug=True)
-    for var_name, val in capacity_vars.items():
+    vars, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in vars.items():
+      sampler.add_variable(sampled_var)
+    for var_name, val in consts.items():
       sampler.add_constant(var_name, val)
 
     # Add optional plots
