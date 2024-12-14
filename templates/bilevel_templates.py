@@ -332,7 +332,7 @@ class InnerTemplate(RavenTemplate):
     # Add all uncertain cashflow parameters from all cashflows from all components to sampler
     for component in components:
       for cashflow in component.get_cashflows():
-        for param_name, vp in cashflow.get_uncertain_params():
+        for param_name, vp in cashflow.get_uncertain_params().items():
           unit_name = f"{component.name}_{cashflow.name}"
           feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=param_name)
           dist_name = self.namingTemplates["distribution"].format(variable=feat_name)

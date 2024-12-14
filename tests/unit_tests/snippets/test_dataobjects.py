@@ -56,9 +56,17 @@ class TestDataSet(unittest.TestCase, TestDataObjectBase):
     self.obj.add_index("index_var", "some_var")
     index_node = self.obj.find("Index[@var='index_var']")
     self.assertIsNotNone(index_node)
-    self.assertEqual(index_node.text, "some_var")
+    self.assertIn("some_var", index_node.text)
 
     self.obj.add_index("another_index", ["var1", "var2"])
     index_node = self.obj.find("Index[@var='another_index']")
     self.assertIsNotNone(index_node)
-    self.assertEqual(index_node.text, ["var1", "var2"])
+    self.assertListEqual(index_node.text, ["var1", "var2"])
+
+    # Try adding duplicate index with new variables. Shouldn't add a new index node but should
+    # add the values to the list.
+    index_ct = len(self.obj.findall("Index"))
+    self.obj.add_index("another_index", ["var3"])
+    self.obj.add_index("another_index", "var4")
+    self.assertEqual(len(self.obj.findall("Index")), index_ct)
+    self.assertListEqual(index_node.text, ["var1", "var2", "var3", "var4"])

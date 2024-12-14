@@ -495,7 +495,7 @@ class RavenTemplate(Template):
     @ Out, None
     """
     ensemble_model = self._template.find("Models/EnsembleModel[@name='sample_and_dispatch']")
-    # dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
+    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
 
     # Gather any ARMA sources from the list of sources
     arma_sources = [s for s in sources if s.is_type("ARMA")]
@@ -504,7 +504,7 @@ class RavenTemplate(Template):
     if any(source.eval_mode == "clustered" for source in arma_sources):
       vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
       vg_dispatch.variables.append(self.namingTemplates["cluster_index"])
-      # dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
+      dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
 
     # Add models, steps, and their requisite data objects and outstreams for each case source
     for source in arma_sources:

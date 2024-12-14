@@ -39,4 +39,16 @@ class DataSet(DataObject):
   tag = "DataSet"
 
   def add_index(self, index_var: str, variables: str | list[str]) -> None:
-    ET.SubElement(self, "Index", {"var": index_var}).text = variables
+    # Force to be a list
+    if not isinstance(variables, list):
+      variables = [str(variables)]
+
+    # There shouldn't be any reason to have duplicate index nodes, so only add the indicated index variable
+    index_node = self.find(f"Index[@var='{index_var}']")
+    if index_node is None:
+      ET.SubElement(self, "Index", {"var": index_var}).text = variables
+    else:
+      # If there are any variables provided that aren't in the existing index node's text, add them here.
+      for var in variables:
+        if var not in index_node.text:
+          index_node.text.append(var)
