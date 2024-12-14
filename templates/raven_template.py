@@ -9,10 +9,11 @@
 import sys
 import os
 import dill as pk
+import itertools
 import xml.etree.ElementTree as ET
 
 from .types import HeronCase, Component, Source, ValuedParam
-from .naming_utils import get_result_stats, get_component_activity_vars, get_opt_objective
+from .naming_utils import get_result_stats, get_component_activity_vars, get_opt_objective, get_statistics, Statistic
 from .xml_utils import add_node_to_tree, stringify_node_values
 from .snippet_utils import load_pickled_rom, print_rom_meta
 
@@ -59,7 +60,7 @@ def parse_to_snippets(node: ET.Element) -> ET.Element:
   # If the node doesn't match a registered RavenSnippet class, copy over the node to the
   parsed = ET.Element(node.tag, node.attrib)
   parsed.text = node.text
-  # parsed.tail = node.tail
+  parsed.tail = node.tail
 
   # Recurse over node children (if any)
   for child in node:
@@ -452,6 +453,10 @@ class RavenTemplate(Template):
 
     var_names = stats_var_names + activity_var_names
 
+    # The optimization objective might not have made it into the list. Make sure it's there.
+    if case.get_mode() == "opt" and (objective := get_opt_objective(case)) not in var_names:
+      var_names.insert(0, objective)
+
     return var_names
 
   def _get_activity_metrics(self, components: list[Component]):
@@ -490,7 +495,7 @@ class RavenTemplate(Template):
     @ Out, None
     """
     ensemble_model = self._template.find("Models/EnsembleModel[@name='sample_and_dispatch']")
-    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
+    # dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
 
     # Gather any ARMA sources from the list of sources
     arma_sources = [s for s in sources if s.is_type("ARMA")]
@@ -499,7 +504,7 @@ class RavenTemplate(Template):
     if any(source.eval_mode == "clustered" for source in arma_sources):
       vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
       vg_dispatch.variables.append(self.namingTemplates["cluster_index"])
-      dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
+      # dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
 
     # Add models, steps, and their requisite data objects and outstreams for each case source
     for source in arma_sources:
@@ -542,6 +547,40 @@ class RavenTemplate(Template):
 
       # update variable group with ROM output variable names
       self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").variables.extend(out_vars)
+
+  def _get_stats_for_econ_postprocessor(self, case: HeronCase, econ_vars: list[str], activity_vars: list[str]) -> list[tuple[Statistic, str]]:
+    # Econ metrics with all statistics names
+    # NOTE: This logic is borrowed from RavenTemplate._get_statistical_results_vars, but it's more useful to have the names,
+    # prefixes, and variable name separate here, not as one big string. Otherwise, we have to try to break that string
+    # back up, which would be sensitive to metric and variable naming conventions. We duplicate a little of the logic but
+    # get something more robust in return.
+    default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
+    stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
+    econ_stats = get_statistics(stats_names, case.stats_metrics_meta)
+    # Activity metrics with non-financial statistics
+    non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
+    activity_stats = get_statistics(non_fin_stat_names, case.stats_metrics_meta)
+
+    # Collect the statistics to add to the postprocessor
+    stats_to_add = list(itertools.chain(
+      itertools.product(econ_stats, econ_vars),
+      itertools.product(activity_stats, activity_vars)
+    ))
+
+    # The metric needed for the objective function might not have been added yet.
+    if case.get_mode() == "opt":
+      opt_settings = case.get_optimization_settings()
+      try:
+        statistic = opt_settings["stats_metric"]["name"]
+      except (KeyError, TypeError):
+        statistic = "expectedValue"  # default to expectedValue
+      opt_stat, = get_statistics([statistic], case.stats_metrics_meta)
+      target_var, _ = case.get_opt_metric()
+      target_var_output_name = case.economic_metrics_meta[target_var]["output_name"]
+      if (opt_stat, target_var_output_name) not in stats_to_add:
+        stats_to_add.append((opt_stat, target_var_output_name))
+
+    return stats_to_add
 
   # Distributions
   def _create_new_sampled_capacity(self, var_name, capacities):

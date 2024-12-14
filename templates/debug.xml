@@ -2,39 +2,38 @@
   <RunInfo>
     <JobName></JobName>
     <WorkingDir>.</WorkingDir>
-    <Sequence>debug, debug_output, write_full</Sequence>  <!-- fill in with steps -->
+    <Sequence>debug, debug_output, write_database</Sequence>  <!-- fill in with steps -->
     <batchSize>1</batchSize>
   </RunInfo>
 
   <Steps>
     <MultiRun name="debug">
       <Input class='DataObjects' type='PointSet'>dispatch_placeholder</Input>
-      <Output class='DataObjects' type='DataSet'>arma_metrics</Output>
-      <Output class="DataObjects" type="DataSet">disp_full</Output>
-      <!-- <Output class="DataObjects" type="DataSet">dispatch</Output> -->
-      <!-- <Output class="DataObjects" type="HistorySet">cashflows</Output> -->
+      <Output class="DataObjects" type="DataSet">dispatch</Output>
+      <Output class="DataObjects" type="HistorySet">cashflows</Output>
     </MultiRun>
     <IOStep name="debug_output">
-      <Input class="DataObjects" type="DataSet">disp_full</Input>
+      <Input class="DataObjects" type="DataSet">dispatch</Input>
       <Input class="DataObjects" type="HistorySet">cashflows</Input>
       <Output class="OutStreams" type="Print">dispatch_print</Output>
       <Output class="OutStreams" type="Print">cashflows</Output>
     </IOStep>
-    <IOStep name="write_full">
-      <Input class="DataObjects" type="DataSet">disp_full</Input>
-      <Output class="Databases" type="NetCDF">disp_full</Output>
+    <IOStep name="write_database">
+      <Input class="DataObjects" type="DataSet">dispatch</Input>
+      <Output class="Databases" type="NetCDF">dispatch</Output>
     </IOStep>
   </Steps>
 
   <VariableGroups>
     <Group name="GRO_capacities"/>
-    <Group name='GRO_outer_debug_dispatch'></Group>
-    <Group name='GRO_outer_debug_synthetics'></Group>
+    <Group name='GRO_debug_synthetics'></Group>
     <Group name='GRO_dispatch'>GRO_dispatch_in, GRO_dispatch_out, GRO_time_indices</Group>
     <Group name='GRO_dispatch_in'>GRO_dispatch_in_scalar, GRO_dispatch_in_Time</Group>
     <Group name='GRO_dispatch_out'/>
     <Group name='GRO_dispatch_in_scalar' >GRO_capacities, scaling</Group>
     <Group name='GRO_dispatch_in_Time'/>
+    <Group name="GRO_full_dispatch"/>
+    <Group name="GRO_full_dispatch_indices">GRO_time_indices</Group>
     <Group name='GRO_armasamples'>GRO_armasamples_in, GRO_armasamples_out</Group>
     <Group name='GRO_armasamples_in'>GRO_armasamples_in_scalar</Group>
     <Group name='GRO_armasamples_out'>GRO_armasamples_out_scalar</Group>
@@ -42,11 +41,8 @@
     <Group name='GRO_armasamples_out_scalar'/>
     <Group name='GRO_final_return'/>
     <Group name="GRO_time_indices"/>
-    <Group name="GRO_full_dispatch"/>
-    <Group name="GRO_full_dispatch_indices">GRO_time_indices</Group>
     <Group name="GRO_cashflows"/>
     <Group name='GRO_interp'>stepwise</Group>
-    <Group name='GRO_init_disp'/>
   </VariableGroups>
 
   <DataObjects>
@@ -62,10 +58,10 @@
     </PointSet>
     <DataSet name="dispatch">
       <Input>scaling</Input>
-      <Output>GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</Output>
-      <Index var="Time">GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</Index>
-      <Index var="Year">GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</Index>
-      <Index var="_ROM_Cluster">GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</Index>
+      <Output>GRO_full_dispatch, GRO_debug_synthetics</Output>
+      <Index var="Time">GRO_full_dispatch, GRO_debug_synthetics</Index>
+      <Index var="Year">GRO_full_dispatch, GRO_debug_synthetics</Index>
+      <Index var="_ROM_Cluster">GRO_full_dispatch, GRO_debug_synthetics</Index>
     </DataSet>
     <HistorySet name="cashflows">
       <Output>GRO_cashflows</Output>
@@ -73,52 +69,32 @@
         <pivotParameter>cfYears</pivotParameter>
       </options>
     </HistorySet>
-    <PointSet name="arma_metrics"/>
-    <PointSet name="metrics_stats">
-      <Output>GRO_final_return</Output>
-    </PointSet>
-    <DataSet name="disp_full">
-      <Output>GRO_full_dispatch, GRO_dispatch, GRO_cashflows</Output>
-      <Index var="Time">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="Year">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="_ROM_Cluster">GRO_full_dispatch, GRO_dispatch_in_Time</Index>
-      <Index var="cfYears">GRO_cashflows</Index>
-    </DataSet>
   </DataObjects>
 
   <Databases>
-    <NetCDF name="disp_full" readMode="overwrite" directory="">
-      <!-- <variables>GRO_outer_debug_dispatch, GRO_outer_debug_synthetics</variables> -->
+    <NetCDF name="dispatch" readMode="overwrite" directory="">
+      <variables>GRO_full_dispatch, GRO_debug_synthetics</variables>
     </NetCDF>
   </Databases>
 
   <Models>
-    <!-- Code model is present for ALL bilevel outer workflows -->
     <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
       <variables>GRO_dispatch, GRO_armasamples, GRO_full_dispatch, GRO_full_dispatch_indices, GRO_cashflows, cfYears</variables>
     </ExternalModel>
-    <!-- Add pickled time series ROMs -->
   </Models>
 
-  <Samplers>
-  </Samplers>
+  <Samplers/>
 
-  <Files>
-    <!-- pickled ROM file -->
-  </Files>
+  <Files/>
 
   <OutStreams>
     <Print name="dispatch_print">
       <type>csv</type>
-      <source>disp_full</source>
+      <source>dispatch</source>
     </Print>
     <Print name="cashflows">
       <type>csv</type>
       <source>cashflows</source>
-    </Print>
-    <Print name='disp_debug'>
-      <type>csv</type>
-      <source>arma_samples</source>
     </Print>
   </OutStreams>
 </Simulation>

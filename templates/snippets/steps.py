@@ -1,9 +1,16 @@
+import xml.etree.ElementTree as ET
 from .base import RavenSnippet
 
 
 class Step(RavenSnippet):
   snippet_class = "Steps"
   _allowed_subs = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
+
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "Step":
+    # Using the match_text requires the text of the nodes to match (in addition to tag and attributes). This is to make
+    # sure similar assembler nodes (e.g. outputting two PointSets)
+    return super().from_xml(node, match_text=True)
 
   def _add_item(self, tag: str, entity: RavenSnippet) -> None:
     if tag not in self._allowed_subs:

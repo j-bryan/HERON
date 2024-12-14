@@ -19,6 +19,7 @@ from .raven_template import RavenTemplate
 from .bilevel_templates import BilevelTemplate
 from .flat_templates import FlatMultiConfigTemplate, FlatMultiDispatchTemplate
 from .debug_template import DebugTemplate
+from .naming_utils import get_capacity_vars
 
 # load utils
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -46,17 +47,26 @@ class TemplateDriver(Base):
   # Public API #
   ##############
   def create_workflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> list[RavenTemplate]:
-    if any(s.is_type("CSV") for s in sources):
-      raise NotImplementedError
-    # Flat or bilevel template?
     if case.debug["enabled"]:
-      raise NotImplementedError
+      # Debug mode runs a workflow with fixed capacities. Both
       self._template = DebugTemplate()
-    elif self._all_capacities_fixed(components):  # Can use flat inner
+    elif any(source.is_type("CSV") for source in sources) and not self._has_uncertain_variable_costs(components):
+      # Fixed history workflow: only run the dispatch optimization once per capacity configuration.
+      # This requires the time history source to be fixed (static history) and for there to be no uncertain economic
+      # parameters for variable costs for dispatchable components.
+      # FIXME: Assumes only 1 history in static history CSV
+      # FIXME: Assumes CSV source's only purpose if providing a static history
+      raise NotImplementedError("FlatMultiConfig template not yet implemented.")
       self._template = FlatMultiConfigTemplate()
-    elif self._uses_one_history(case, sources) and not self._has_uncertain_variable_costs(case, components, sources):  # Can use flat outer
+    elif self._has_all_capacities_fixed(components):
+      # Fixed configuration workflow: analyze a fixed system configuration over many synthetic histories.
+      # This is like a generalization of debug mode. All types of uncertain economic parameters can be accommodated
+      # in this type of workflow.
+      raise NotImplementedError("FlatMultiDispatch template not yet implemented.")
       self._template = FlatMultiDispatchTemplate()
-    else:  # Use bi-level formulation
+    else:
+      # Use the bilevel problem formulation. Outer workflow samples component capacities and uncertain economic
+      # parameters. Inner workflow performs dispatch optimization over multiple synthetic histories.
       self._template = BilevelTemplate()
 
     self._template.loadTemplate()
@@ -72,22 +82,42 @@ class TemplateDriver(Base):
   # Utility methods #
   ###################
   @staticmethod
-  def _all_capacities_fixed(components: list[Component]) -> bool:
-    """ Checks if all components have fixed capacities """
-    # TODO
-    return False
+  def _has_all_capacities_fixed(components: list[Component]) -> bool:
+    """
+    Checks if all components have fixed capacities
+    @ In, components, list[Component], list of HERON case components
+    @ Out, has_all_capacities_fixed, bool, if all components have fixed capacities
+    """
+    return not any([comp.get_capacity(None, raw=True).is_parametric() for comp in components])
 
   @staticmethod
-  def _uses_one_history(case: HeronCase, sources: list[Source]) -> bool:
-    """ Checks if only one history is used, whether it is fixed from a file or is sampled from a ROM """
-    # TODO
-    return False
+  def _has_static_history(sources: list[Source]) -> bool:
+    """
+    Checks if a static history is being used (as opposed to using a synthetic history model)
+    @ In, sources, list[Source], list of source placeholders
+    @ Out, has_static_history, bool, if all components have fixed capacities
+    """
+    return any([source.is_type("CSV") for source in sources])
 
   @staticmethod
-  def _has_uncertain_variable_costs(case: HeronCase, components: list[Component], sources: list[Source]) -> bool:
-    """ Checks if any components are dispatchable and have an uncertain variable cost """
-    # TODO
-    return True
+  def _has_uncertain_variable_costs(components: list[Component]) -> bool:
+    """
+    Checks if any components have uncertain cashflow parameters which affect the dispatch. For this to be the case,
+    a component must be dispatchable and must have an hourly recurring cashflow with an uncertain parameter.
+    @ In, components, list[Component], HERON case components
+    @ Out, has_uncertain_variable_costs, bool, if there are any uncertain variable costs for dispatchable componentss
+    """
+    for component in components:
+      if not component.is_dispatchable():
+        # If a component is not dispatchable, optimal system dispatch is not a function of its cashflows
+        continue
+
+      for cashflow in component.get_cashflows():
+        if cashflow.get_period() == "hour" and cashflow.is_uncertain():
+          # Only cashflows which are hourly recurring and uncertain affect the optimal dispatch
+          return True
+
+    return False
 
 
 class Template(TemplateBase, Base):

@@ -13,16 +13,24 @@ class RavenSnippet(ET.Element):
   subtype = None  # subtype of the snippet entity, does not need to be defined for all snippets
 
   @classmethod
-  def from_xml(cls, node: ET.Element) -> "RavenSnippet":
+  def from_xml(cls, node: ET.Element, **kwargs) -> "RavenSnippet":
     """
     Alternate constructor which instantiates a new RavenSnippet object from an existing XML node
     @ In, node, ET.Element, the template node
+    @ In, kwargs, dict, keyword arguments
     @ Out, snippet, RavenSnippet, the new snippet
     """
+    # Instantiate the snippet class and copy over attribs and text
     snippet = cls()
-    snippet.attrib.update(node.attrib)
+    snippet.attrib |= node.attrib
     snippet.text = node.text
-    snippet = merge_trees(snippet, node)
+
+    # Merge the node's subtree into the snippet's subtree. Whether or not to overwrite equal nodes (overwrite=True),
+    # include both nodes (overwrite=False), and whether or not matching nodes must have matching attributes
+    # (match_attrib) can be contolled via keyword arguments.
+    merge_kwargs = {k: kwargs[k] for k in kwargs.keys() & {"overwrite", "match_attrib", "match_text"}}
+    snippet = merge_trees(snippet, node, **merge_kwargs)
+
     return snippet
 
   def __init__(self,

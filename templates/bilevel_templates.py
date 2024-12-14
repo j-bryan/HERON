@@ -1,10 +1,10 @@
 import sys
 import os
 import shutil
-import itertools
+import xml.etree.ElementTree as ET
 
 from .types import HeronCase, Component, Source
-from .naming_utils import get_capacity_vars, get_component_activity_vars, get_statistics, Statistic
+from .naming_utils import get_capacity_vars, get_component_activity_vars, get_opt_objective
 
 from .raven_template import RavenTemplate
 from .snippets.factory import factory as snippet_factory
@@ -245,43 +245,9 @@ class InnerTemplate(RavenTemplate):
     results_vars = self._get_statistical_results_vars(case, components)
     vg_final_return.variables.extend(results_vars)
 
+    # Fill out the econ postprocessor statistics
     econ_pp = self._template.find("Models/PostProcessor[@name='statistics']")
-    # Econ metrics with all statistics names
-    # NOTE: This logic is borrowed from RavenTemplate._get_statistical_results_vars, but it's more useful to have the names,
-    # prefixes, and variable name separate here, not as one big string. Otherwise, we have to try to break that string
-    # back up, which would be sensitive to metric and variable naming conventions. We duplicate a little of the logic but
-    # get something more robust in return.
-    default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
-    econ_stats = get_statistics(stats_names, case.stats_metrics_meta)
-    # Activity metrics with non-financial statistics
-    non_fin_stat_names = [name for name in stats_names if name not in self.FINANCIAL_STATS_NAMES]
-    activity_stats = get_statistics(non_fin_stat_names, case.stats_metrics_meta)
-
-    # Collect the statistics to add to the postprocessor
-    stats_to_add = list(itertools.chain(
-      itertools.product(econ_stats, econ_vars),
-      itertools.product(activity_stats, activity_vars)
-    ))
-
-    # The metric needed for the objective function might not have been added yet.
-    if case.get_mode() == "opt":
-      opt_settings = case.get_optimization_settings()
-      try:
-        statistic = opt_settings["stats_metric"]["name"]
-      except (KeyError, TypeError):
-        statistic = "expectedValue"  # default to expectedValue
-      opt_stat, = get_statistics([statistic], case.stats_metrics_meta)
-      target_var, _ = case.get_opt_metric()
-      target_var_output_name = case.economic_metrics_meta[target_var]["output_name"]
-      if (opt_stat, target_var_output_name) not in stats_to_add:
-        stats_to_add.append((opt_stat, target_var_output_name))
-      # We need to make sure the optimization objective is GRO_final_return, too
-      if (opt_stat_name := opt_stat.to_metric(target_var_output_name)) not in vg_final_return.variables:
-        vg_final_return.variables.insert(0, opt_stat_name)
-
-    # Now add them
-    for stat, variable in stats_to_add:
+    for stat, variable in self._get_stats_for_econ_postprocessor(case, econ_vars, activity_vars):
       econ_pp.append(stat.to_element(variable))
 
     # Work out how the inner results should be routed back to the outer
@@ -358,44 +324,34 @@ class InnerTemplate(RavenTemplate):
       year_index.set("var", year_name)
 
   def _add_uncertain_cashflow_params(self, components) -> None:
-    cf_attrs = ["_driver", "_alpha", "_reference", "_scale"]
-
     vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
     if vg_econ_uq is None:
       vg_econ_uq = VariableGroup("GRO_UQ")
     mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
 
-    # looping through components to find uncertain cashflow attributes
+    # Add all uncertain cashflow parameters from all cashflows from all components to sampler
     for component in components:
-      comp_name = component.name
-      # this is gonna be gross
-      cfs = component.get_cashflows()
+      for cashflow in component.get_cashflows():
+        for param_name, vp in cashflow.get_uncertain_params():
+          unit_name = f"{component.name}_{cashflow.name}"
+          feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=param_name)
+          dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
 
-      for cf, attr in itertools.product(cfs, cf_attrs):
-        vp = getattr(cf, attr)
-        if vp.type != "RandomVariable":
-          continue
+          # Reconstruct distribution XML node from ValuedParam definition
+          dist_node = vp._vp.get_distribution()  # type: ET.Element
+          dist_node.set("name", dist_name)
+          dist_snippet = snippet_factory.from_xml(dist_node)
+          self._add_snippet(dist_snippet)
 
-        unit_name = f"{comp_name}_{cf.name}"
-        feature_name = attr.rsplit("_", 1)[1]
-        feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=feature_name)
-        dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
+          # Add uncertain parameter to econ UQ variable group
+          vg_econ_uq.variables.append(feat_name)
 
-        print("Uncertain econ:", feat_name)
+          # Add distribution to MonteCarlo sampler
+          sampler_var = SampledVariable(feat_name)
+          sampler_var.distribution = dist_snippet
+          mc.add_variable(sampler_var)
 
-        dist_node = vp._vp.get_distribution() #ugh, this is NOT the XML... will have to reconstruct.
-        dist_node.set("name", dist_name)
-        dist_snippet = snippet_factory.from_xml(dist_node)
-        self._add_snippet(dist_snippet)  # added to Distributions
-
-        # Add uncertain parameter to econ UQ variable group
-        vg_econ_uq.variables.append(feat_name)
-
-        # Add distribution to MonteCarlo sampler
-        sampler_var = SampledVariable(feat_name)
-        sampler_var.distribution = dist_snippet
-        mc.add_variable(sampler_var)
-
+    # Update variable groups with the GRO_UQ group to include the uncertain cashflow parameters in the model inputs
     if vg_econ_uq.variables:
       self._add_snippet(vg_econ_uq)
       self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)

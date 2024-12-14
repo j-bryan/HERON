@@ -111,7 +111,7 @@ def find_node(parent: ET.Element, tag: str, make_if_missing: bool = True) -> ET.
 
   return node
 
-def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, match_attrib: bool = True) -> ET.Element:
+def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, match_attrib: bool = True, match_text: bool = False) -> ET.Element:
   """
   Merge "right" tree into "left" tree. Equivalent nodes are defined by having equal tags and attributes. If overwrite
   is True, the attributes and text of an element of "left" will be overwritten by the values in a matching node in
@@ -121,16 +121,19 @@ def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, 
 
   @ In, left, ET.Element, the first tree
   @ In, right, ET.Element, the second tree
-  @ In overwrite, bool, optional, if duplicate nodes
+  @ In overwrite, bool, optional,  TODO
+  @ In, match_attrib, bool, optional, TODO
+  @ In, match_text, bool, optional, TODO
+  @ Out, left, ET.Element, root element for the merged subtree
   """
+  def is_matching_node(node1, node2):
+    return (node1.attrib == node2.attrib or not match_attrib) and (node1.text == node2.text or not match_text)
+
   def find_matching_node(node, candidates):
     for candidate in candidates:
       if node.tag != candidate.tag:
         continue
-      if match_attrib:
-        if node.attrib == candidate.attrib:
-          return candidate
-      else:
+      if is_matching_node(node, candidate):
         return candidate
     return None
 
