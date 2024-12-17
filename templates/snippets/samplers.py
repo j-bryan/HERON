@@ -81,6 +81,15 @@ class Sampler(RavenSnippet):
   def add_constant(self, name: str, value: str) -> None:
     ET.SubElement(self, "constant", attrib={"name": name}).text = value
 
+  def has_variable(self, variable: str | SampledVariable) -> bool:
+    """
+    Does the sampler sample a given variable?
+    @ In, variable, str | SampledVariable, the variable to check for
+    @ Out, var_found, bool, if the variable is in the sampler
+    """
+    var_name = variable if isinstance(variable, str) else variable.name
+    var_found = self.find(f"variable[@name='{var_name}']") is not None
+    return var_found
 
 class Grid(Sampler):
   tag = "Grid"

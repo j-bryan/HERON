@@ -70,6 +70,15 @@ class TestSamplerBase(unittest.TestCase):
     self.sampler.add_constant("my_const", "some_value")
     self.assertEqual(self.sampler.find("constant[@name='my_const']").text, "some_value")
 
+  def test_has_variable(self):
+    sampled_var = SampledVariable("some_var")
+    self.sampler.add_variable(sampled_var)
+    self.assertTrue(self.sampler.has_variable(sampled_var))
+    self.assertTrue(self.sampler.has_variable(sampled_var.name))
+
+    other_var = SampledVariable("other_var")  # not added to sampler
+    self.assertFalse(self.sampler.has_variable(other_var))
+    self.assertFalse(self.sampler.has_variable(other_var.name))
 
 class TestGrid(unittest.TestCase):
   def setUp(self):

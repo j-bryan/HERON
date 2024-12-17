@@ -1,4 +1,4 @@
-import itertools
+import itertools as it
 
 from templates.raven_template import RavenTemplate
 
@@ -59,7 +59,7 @@ class DebugTemplate(RavenTemplate):
 
     # Are there any uncertain cashflow parameters which need to get sampled?
     cashflow_vars, cashflow_dists = self._get_uncertain_cashflow_params(components)
-    has_uncertain_cashflows = len(cashflow_vars)
+    has_uncertain_cashflows = len(cashflow_vars) > 0
 
     # Create the Monte Carlo sampler, if needed
     if any([has_arma_source, has_sampled_capacities, has_uncertain_cashflows]):
@@ -178,14 +178,14 @@ class DebugTemplate(RavenTemplate):
 
       # Add variables to the custom sampler for the
       custom_sampler.append(csv_dataset.to_assembler_node("Source"))
-      for var in itertools.chain(time_indices, source_vars):
-        if custom_sampler.find(f"variable[@name='{var}']") is None:
-          # NOTE: Being careful not to add duplicate time index variables to the custom sampler in case somebody tries
-          # to include multiple CSV sources.
-          custom_sampler.add_variable(SampledVariable(var))
+      for var in it.filterfalse(custom_sampler.has_variable, it.chain(time_indices, source_vars)):
+        # NOTE: Being careful not to add duplicate time index variables to the custom sampler in case somebody tries
+        # to include multiple CSV sources.
+        custom_sampler.add_variable(SampledVariable(var))
 
-      # Add the time series cluster index to the HERON dispatch model
+      # Add the static history variables to the dispatch model
       dispatcher = self._template.find("Models/ExternalModel[@name='dispatch']")  # type: HeronDispatchModel
+      dispatcher.variables.extend(source_vars)
       if self.namingTemplates["cluster_index"] not in dispatcher.variables:
         dispatcher.variables.append(self.namingTemplates["cluster_index"])
 
