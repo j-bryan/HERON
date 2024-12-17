@@ -4,7 +4,8 @@ import shutil
 import xml.etree.ElementTree as ET
 
 from .types import HeronCase, Component, Source
-from .naming_utils import get_capacity_vars, get_component_activity_vars, get_opt_objective
+from .naming_utils import get_capacity_vars, get_component_activity_vars
+from .xml_utils import find_node
 
 from .raven_template import RavenTemplate
 from .snippets.factory import factory as snippet_factory
@@ -189,7 +190,8 @@ class InnerTemplate(RavenTemplate):
     #   - add ROM to ensemble model
     #     - input (Source) & output data objects for sampling
     #     - add ROM as assembler node to ensemble model
-    self._add_time_series_roms(case, sources)
+    ensemble_model = self._template.find("Models/EnsembleModel")
+    self._add_time_series_roms(ensemble_model, case, sources)
 
     # Determine which variables are sampled by the Monte Carlo sampler
     mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
@@ -223,7 +225,21 @@ class InnerTemplate(RavenTemplate):
     self._set_time_vars(case.get_time_name(), case.get_year_name())
 
     # See if there are any uncertain cashflow parameters that need to get added to the sampler
-    self._add_uncertain_cashflow_params(components)
+    # self._add_uncertain_cashflow_params(components)
+    sampled_vars, distributions = self._get_uncertain_cashflow_params(components)
+    if len(sampled_vars) > 0:
+      # Create a VariableGroup for the uncertain econ parameters
+      vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
+      if vg_econ_uq is None:
+        vg_econ_uq = VariableGroup("GRO_UQ")
+        self._add_snippet(vg_econ_uq)
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
+      self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
+      # Add the SampledVariable and Distribution nodes to the appropriate locations
+      for samp_var, dist in zip(sampled_vars, distributions):
+        self._add_snippet(dist)
+        vg_econ_uq.variables.append(samp_var.name)
+        mc.add_variable(samp_var)
 
     # Figure out econ metrics are being used for the case
     #   - econ metrics (from case obj), total activity variables (assembled from components list)
@@ -327,10 +343,13 @@ class InnerTemplate(RavenTemplate):
       year_index.set("var", year_name)
 
   def _add_uncertain_cashflow_params(self, components) -> None:
-    vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
-    if vg_econ_uq is None:
-      vg_econ_uq = VariableGroup("GRO_UQ")
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
+    # vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
+    # if vg_econ_uq is None:
+    #   vg_econ_uq = VariableGroup("GRO_UQ")
+    # mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
+
+    sampled_vars = []
+    distributions = []
 
     # Add all uncertain cashflow parameters from all cashflows from all components to sampler
     for component in components:
@@ -344,18 +363,21 @@ class InnerTemplate(RavenTemplate):
           dist_node = vp._vp.get_distribution()  # type: ET.Element
           dist_node.set("name", dist_name)
           dist_snippet = snippet_factory.from_xml(dist_node)
-          self._add_snippet(dist_snippet)
+          distributions.append(dist_snippet)
 
           # Add uncertain parameter to econ UQ variable group
-          vg_econ_uq.variables.append(feat_name)
+          # vg_econ_uq.variables.append(feat_name)
 
           # Add distribution to MonteCarlo sampler
           sampler_var = SampledVariable(feat_name)
           sampler_var.distribution = dist_snippet
-          mc.add_variable(sampler_var)
+          # mc.add_variable(sampler_var)
+          sampled_vars.append(sampler_var)
 
     # Update variable groups with the GRO_UQ group to include the uncertain cashflow parameters in the model inputs
-    if vg_econ_uq.variables:
-      self._add_snippet(vg_econ_uq)
-      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
-      self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
+    # if vg_econ_uq.variables:
+    #   self._add_snippet(vg_econ_uq)
+    #   self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
+    #   self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
+
+    return sampled_vars, distributions

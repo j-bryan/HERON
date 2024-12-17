@@ -161,10 +161,10 @@ class TestExternalModel(unittest.TestCase, TestModelBase):
     self.assertEqual(self.model.subtype, "")
 
   def test_variables(self):
-    self.assertIsNone(self.model.text)
+    self.assertIsNone(self.model.find("variables"))
     self.model.variables.append("var")
     self.assertListEqual(self.model.variables, ["var"])
-    self.assertListEqual(self.model.text, ["var"])
+    self.assertListEqual(self.model.find("variables").text, ["var"])
 
 
 class TestHeronDispatchModel(unittest.TestCase, TestModelBase):

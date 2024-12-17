@@ -131,13 +131,26 @@ class ExternalModel(RavenSnippet):
   snippet_class = "Models"
   subtype = ""
 
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "ExternalModel":
+    model = cls()
+    model.attrib |= node.attrib
+    for sub in node:
+      if sub.tag == "variables":
+        model.variables = [v.strip() for v in sub.text.split(",")]
+      else:
+        model.append(sub)
+    return model
+
   @listproperty
   def variables(self) -> list[str]:
-    return self.text or []
+    vars_node = self.find("variables")
+    return [] if vars_node is None or not vars_node.text else vars_node.text
 
   @variables.setter
   def variables(self, value: list[str]) -> None:
-    self.text = value
+    vars_node = find_node(self, "variables")
+    vars_node.text = value
 
 class HeronDispatchModel(ExternalModel):
   snippet_class = "Models"

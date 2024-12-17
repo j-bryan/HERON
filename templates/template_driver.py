@@ -46,7 +46,14 @@ class TemplateDriver(Base):
   ##############
   # Public API #
   ##############
-  def create_workflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> list[RavenTemplate]:
+  def create_workflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    """
+    Create a workflow for the specified Case and its components and sources
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], components in HERON case
+    @ In, sources, list[Source], external models, data, and functions
+    @ Out, None
+    """
     if case.debug["enabled"]:
       # Debug mode runs a workflow with fixed capacities. Both
       self._template = DebugTemplate()

@@ -7,7 +7,7 @@ from .models import EconomicRatioPostProcessor, EnsembleModel, ExternalModel, Ga
 from .optimizers import BayesianOptimizer, GradientDescent
 from .outstreams import HeronDispatchPlot, OptPathPlot, PrintOutStream, TealCashFlowPlot
 from .runinfo import RunInfo
-from .samplers import CustomSampler, Grid, MonteCarlo, SampledVariable, Sampler, Stratified
+from .samplers import CustomSampler, Grid, MonteCarlo, SampledVariable, Sampler, Stratified, EnsembleForward
 from .steps import IOStep, MultiRun, PostProcess
 from .variablegroups import VariableGroup
 

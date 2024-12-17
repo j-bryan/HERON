@@ -119,6 +119,10 @@
     type = Unittest
     input = 'test_samplers.TestCustomSampler'
   [../]
+  [./samplers_EnsembleForward]
+    type = Unittest
+    input = 'test_samplers.TestEnsembleForward'
+  [../]
   [./steps_MultiRun]
     type = Unittest
     input = 'test_steps.TestMultiRun'

@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from .types import HeronCase
+from .types import HeronCase, Component
+from .snippets.factory import factory as snippet_factory
+from .snippets.samplers import SampledVariable
+from .snippets.distributions import Distribution
 
 
 @dataclass(frozen=True)
@@ -106,10 +109,10 @@ def get_result_stats(names: list[str], stats: list[str], case: HeronCase) -> lis
   stat_names = [stat.to_metric(name) for stat, name in itertools.product(stats_objs, names)]
   return stat_names
 
-def get_capacity_vars(components, name_template, *, debug=False) -> dict[str, Any]:
+def get_capacity_vars(components: list[Component], name_template, *, debug=False) -> dict[str, Any]:
   """
   Get dispatch variable names
-  @ In, components, list, list of HERON components
+  @ In, components, list[Component], list of HERON components
   @ In, name_template, str, naming template for dispatch variable name, expecting
                             keywords "component", "tracker", and "resource"
   @ Out, vars, dict, variable name-value pairs
@@ -138,10 +141,10 @@ def get_capacity_vars(components, name_template, *, debug=False) -> dict[str, An
 
   return vars
 
-def get_component_activity_vars(components: list, name_template: str) -> list[str]:
+def get_component_activity_vars(components: list[Component], name_template: str) -> list[str]:
   """
   Get dispatch variable names
-  @ In, components, list, list of HERON components
+  @ In, components, list[Component], list of HERON components
   @ In, name_template, str, naming template for dispatch variable name, expecting
                             keywords "component", "tracker", and "resource"
   @ Out, vars, list[str], list of variable names
@@ -186,3 +189,24 @@ def get_opt_objective(case: HeronCase) -> str:
 
   objective = f"{stat_name}_{target_var_output_name}"
   return objective
+
+def get_cashflow_names(components):
+  """
+    Loop through components and collect all the full cashflow names
+    @ In, components, list, list of HERON Component instances for this run
+    @ Out, cfs, list, list of cashflow full names e.g. {comp}_{cf}_CashFlow
+  """
+  cfs = []
+  for comp in components:
+    comp_name = comp.name
+    for cashflow in comp.get_cashflows():
+      # User has specified to leave this cashflow out of the NPV calculation. Skip it.
+      if cashflow.is_npv_exempt():
+        continue
+      cf_name = cashflow.name
+      name = f"{comp_name}_{cf_name}_CashFlow"
+      cfs.append(name)
+      if cashflow.get_depreciation() is not None:
+        cfs.append(f"{comp_name}_{cf_name}_depreciation")
+        cfs.append(f"{comp_name}_{cf_name}_depreciation_tax_credit")
+  return cfs

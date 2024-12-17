@@ -22,7 +22,7 @@ from .snippets.runinfo import RunInfo
 from .snippets.steps import Step, MultiRun, IOStep, PostProcess
 from .snippets.samplers import Sampler, SampledVariable, Grid, Stratified, MonteCarlo, CustomSampler
 from .snippets.optimizers import Optimizer, BayesianOptimizer, GradientDescent
-from .snippets.models import RavenCode, GaussianProcessRegressor, PickledROM, EconomicRatioPostProcessor
+from .snippets.models import GaussianProcessRegressor, PickledROM, EnsembleModel
 from .snippets.distributions import Distribution, Uniform
 from .snippets.outstreams import OutStream, PrintOutStream, OptPathPlot
 from .snippets.dataobjects import DataObject, PointSet, DataSet
@@ -106,6 +106,11 @@ class RavenTemplate(Template):
   ########################
 
   def loadTemplate(self) -> None:
+    """
+    Load a template XML file into an ET.Element tree
+    @ In, None,
+    @ Out, None
+    """
     this_file_dir = os.path.dirname(os.path.abspath(__file__))
     template_path = os.path.join(this_file_dir, self.template_path)
     raw_template, _ = xmlUtils.loadToTree(template_path)
@@ -113,15 +118,30 @@ class RavenTemplate(Template):
     # the template XML.
     self._template = parse_to_snippets(raw_template)
 
-  def createWorkflow(self, case, components, sources) -> None:
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    """
+    Create a workflow for the specified Case and its components and sources
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], components in HERON case
+    @ In, sources, list[Source], external models, data, and functions
+    @ Out, None
+    """
     # Universal workflow settings
     self._set_verbosity(case.get_verbosity())
     self._initialize_runinfo(case)
 
-  def writeWorkflow(self, destination, case, components, sources, run=False) -> None:
+  def writeWorkflow(self,
+                    destination: str,
+                    case: HeronCase,
+                    components: list[Component],
+                    sources: list[Source],
+                    run: bool = False) -> None:
     """
       Write RAVEN workflow
       @ In, destination, str, path to write workflows to
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], components in HERON case
+    @ In, sources, list[Source], external models, data, and functions
       @ In, run, bool, if True then attempt to run the workflows
       @ Out, None
     """
@@ -165,9 +185,6 @@ class RavenTemplate(Template):
     @ In, snippet, RavenSnippet, the XML snippet to add
     @ In, parent, str | ET.Element | None, the parent node to add the snippet
     """
-    # if not isinstance(snippet, RavenSnippet):
-    #   raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
-    #                   "")
     if isinstance(snippet, ET.Element) and not isinstance(snippet, RavenSnippet):
       raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
                       "Perhaps something went wrong when parsing the template XML, and the correct RavenSnippet "
@@ -487,22 +504,21 @@ class RavenTemplate(Template):
       ET.SubElement(rom, "clusterEvalMode").text = "clustered"
     return rom
 
-  def _add_time_series_roms(self, case: HeronCase, sources: list[Source]):
+  def _add_time_series_roms(self, ensemble_model: EnsembleModel, case: HeronCase, sources: list[Source]):
     """
     Create and modify snippets based on sources
     @ In, case, Case, HERON case
     @ In, sources, list[Source], case sources
     @ Out, None
     """
-    ensemble_model = self._template.find("Models/EnsembleModel[@name='sample_and_dispatch']")
-    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
+    dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")  # type: DataSet
 
     # Gather any ARMA sources from the list of sources
     arma_sources = [s for s in sources if s.is_type("ARMA")]
 
     # Add cluster index info to dispatch variable groups and data objects
     if any(source.eval_mode == "clustered" for source in arma_sources):
-      vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
+      vg_dispatch = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")  # type: VariableGroup
       vg_dispatch.variables.append(self.namingTemplates["cluster_index"])
       dispatch_eval.add_index(self.namingTemplates["cluster_index"], "GRO_dispatch_in_Time")
 
@@ -735,9 +751,11 @@ class RavenTemplate(Template):
     # Add Function sources as Files
     files = []
     for function in [s for s in sources if s.is_type("Function")]:
-      file = File(function.name)
-      file.path = os.path.join(os.pardir, function._source)
-      self._add_snippet(file)
+      file = self._template.find(f"Files/Input[@name='{function.name}']")
+      if file is None:
+        file = File(function.name)
+        file.path = os.path.join(os.pardir, function._source)
+        self._add_snippet(file)
       files.append(file)
     return files
 
@@ -768,3 +786,35 @@ class RavenTemplate(Template):
       opt_out_metric_name = 'missing'
 
     return opt_out_metric_name
+
+  def _get_uncertain_cashflow_params(self, components: list[Component]) -> tuple[list[SampledVariable], list[Distribution]]:
+    """
+    Create SampledVariable and Distribution snippets for all uncertain cashflow parameters.
+    @ In, components, list[Component]
+    @ Out, sampled_vars, list[SampledVariable], objects to link sampler variables to distributions
+    @ Out, distributions, list[Distribution], distribution snippets
+    """
+    sampled_vars = []
+    distributions = []
+
+    # For each component, cashflow, and cashflow equation parameter, find any which are uncertain, and create distribution
+    # and sampled variable objects.
+    for component in components:
+      for cashflow in component.get_cashflows():
+        for param_name, vp in cashflow.get_uncertain_params().items():
+          unit_name = f"{component.name}_{cashflow.name}"
+          feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=param_name)
+          dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
+
+          # Reconstruct distribution XML node from ValuedParam definition
+          dist_node = vp._vp.get_distribution()  # type: ET.Element
+          dist_node.set("name", dist_name)
+          dist_snippet = snippet_factory.from_xml(dist_node)
+          distributions.append(dist_snippet)
+
+          # Create sampled variable snippet
+          sampler_var = SampledVariable(feat_name)
+          sampler_var.distribution = dist_snippet
+          sampled_vars.append(sampler_var)
+
+    return sampled_vars, distributions

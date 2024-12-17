@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 # Load HERON tools
 HERON_LOC = os.path.abspath(os.path.join(os.path.dirname(__file__), *[os.pardir]*4))
 sys.path.append(HERON_LOC)
-from HERON.templates.snippets import SampledVariable, Sampler, Grid, MonteCarlo, Stratified, CustomSampler
+from HERON.templates.snippets import RavenSnippet, SampledVariable, Sampler, Grid, MonteCarlo, Stratified, CustomSampler, EnsembleForward
 from HERON.tests.unit_tests.snippets.mock_classes import MockSnippet
 # from HERON.tests.unit_tests.snippets.utils import is_subtree_matching
 sys.path.pop()
@@ -104,3 +104,26 @@ class TestCustomSampler(unittest.TestCase):
 
   def test_tag(self):
     self.assertEqual(self.sampler.tag, "CustomSampler")
+
+
+class TestEnsembleForward(unittest.TestCase):
+  def setUp(self):
+    self.sampler = EnsembleForward()
+
+    xml = """
+    <EnsembleForward name="ensemble_sampler">
+      <Grid name="grid"/>
+      <MonteCarlo name="mc"/>
+      <Stratified name="lhs"/>
+      <CustomSampler name="custom"/>
+      <NotARegisteredSampler name="some_sampler"/>
+    </EnsembleForward>
+    """
+    self.sampler_xml = EnsembleForward.from_xml(ET.fromstring(xml))
+
+  def test_from_xml(self):
+    self.assertIsInstance(self.sampler_xml.find("Grid"), Grid)
+    self.assertIsInstance(self.sampler_xml.find("MonteCarlo"), MonteCarlo)
+    self.assertIsInstance(self.sampler_xml.find("Stratified"), Stratified)
+    self.assertIsInstance(self.sampler_xml.find("CustomSampler"), CustomSampler)
+    self.assertNotIsInstance(self.sampler_xml.find("NotARegisteredSampler"), RavenSnippet)

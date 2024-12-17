@@ -142,10 +142,11 @@ class Placeholder(Base):
       @ In, typ, str, type to check against
       @ Out, is_type, bool, True if matching request
     """
-    # maybe it's not anything we know about
-    if typ not in ['ARMA', 'Function', 'ROM', 'CSV']:
-      return False
-    return eval(f'isinstance(self, {typ})')
+    return self.type == typ
+
+  @property
+  def type(self) -> str:
+    return self._type
 
   def get_variable(self):
     """

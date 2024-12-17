@@ -39,10 +39,8 @@
     <Group name='GRO_armasamples_out'>GRO_armasamples_out_scalar</Group>
     <Group name='GRO_armasamples_in_scalar'>scaling, GRO_capacities</Group>
     <Group name='GRO_armasamples_out_scalar'/>
-    <Group name='GRO_final_return'/>
     <Group name="GRO_time_indices"/>
     <Group name="GRO_cashflows"/>
-    <Group name='GRO_interp'>stepwise</Group>
   </VariableGroups>
 
   <DataObjects>

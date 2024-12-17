@@ -98,3 +98,20 @@ class Stratified(Sampler):
 
 class CustomSampler(Sampler):
   tag = "CustomSampler"
+
+class EnsembleForward(Sampler):
+  tag = "EnsembleForward"
+  sampler_types = {samp_type.tag: samp_type for samp_type in [Grid, MonteCarlo, Stratified, CustomSampler]}
+
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "EnsembleForward":
+    # The EnsembleForward sampler takes other samplers as subelements, so here we take care to create the
+    # appropriate Sampler objects for these subnodes if they're of an implemented type.
+    sampler = cls()
+    sampler.attrib |= node.attrib
+    for sub in node:
+      if sub.tag in cls.sampler_types:
+        sampler.append(cls.sampler_types[sub.tag].from_xml(sub))
+      else:
+        sampler.append(sub)
+    return sampler

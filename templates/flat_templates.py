@@ -34,6 +34,4 @@ class FlatMultiConfigTemplate(RavenTemplate):
     @ In, components, list[Component], HERON components
     @ Out, results, VariableGroup, results variable group
     """
-    # Only this case (multi config/single history) should need deterministic results instead of statistical results
-    results = VariableGroup(name)  # name="GRO_results"?
-    # TODO
+    pass

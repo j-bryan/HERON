@@ -1,24 +1,19 @@
-import sys
-import os
+import itertools
 
+from templates.raven_template import RavenTemplate
+
+from templates.snippets.dataobjects import DataSet
+from templates.snippets.files import File
+from templates.snippets.models import EnsembleModel, HeronDispatchModel
+from templates.snippets.outstreams import HeronDispatchPlot, TealCashFlowPlot
 from templates.snippets.runinfo import RunInfo
+from templates.snippets.samplers import SampledVariable, MonteCarlo, CustomSampler, EnsembleForward
+from templates.snippets.steps import IOStep
+from templates.snippets.variablegroups import VariableGroup
 
-from .raven_template import RavenTemplate
-from .snippets.models import EnsembleModel
-from .snippets.outstreams import HeronDispatchPlot, TealCashFlowPlot
-from .snippets.samplers import Sampler, MonteCarlo
-
-from .naming_utils import get_capacity_vars, get_component_activity_vars
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
-import HERON.src._utils as hutils
-from HERON.src.Cases import Case
-from HERON.src.Components import Component
-from HERON.src.Placeholders import Placeholder
-sys.path.pop()
-
-# get raven location
-RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
+from .types import HeronCase, Component, Source
+from .naming_utils import get_capacity_vars, get_component_activity_vars, get_cashflow_names
+from .xml_utils import find_node
 
 
 class DebugTemplate(RavenTemplate):
@@ -26,65 +21,115 @@ class DebugTemplate(RavenTemplate):
   write_name = "outer.xml"
 
   """ Sets up a flat RAVEN run for debug mode """
-  def createWorkflow(self, case: Case, components: list[Component], sources: list[Placeholder]) -> None:
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     super().createWorkflow(case, components, sources)
 
+    # First, handle aspects of the workflow common across all debug runs
     self._update_vargroups(case, components, sources)
     self._update_dataset_indices(case)
-
-    # Using a static history CSV or an ARMA ROM?
-    #   - if ROM, copy ensemble model workflow from InnerTemplate
-    #   - if CSV, add static CSV to XML, use CustomSampler to set up time series; not ensemble model needed
-    has_arma_source = any(s.is_type("ARMA") for s in sources)
-    has_csv_source = any(s.is_type("CSV") for s in sources)
-    if has_arma_source and has_csv_source:
-      raise ValueError("Mixing static CSVs and time series ROMs is not yet supported!")
-
-    if has_arma_source:
-      sampler = self._use_time_series_rom(case, components, sources)
-    elif has_csv_source:
-      sampler = self._use_static_csv(case, components, sources)
-    else:
-      raise ValueError("No time series sources found!")
-
-    # Set number of samples for sampler
-    sampler.denoises = case.get_num_samples()
-    sampler.init_limit = case.get_num_samples()
-
-    # Add capacities to sampler as constants
-    vars, consts = self._create_sampler_variables(case, components)
-    for sampled_var, vals in vars.items():
-      sampler.add_variable(sampled_var)
-    for var_name, val in consts.items():
-      sampler.add_constant(var_name, val)
 
     # Add optional plots
     debug_iostep = self._template.find("Steps/IOStep[@name='debug_output']")
     if case.debug["dispatch_plot"]:
-      disp_plot = HeronDispatchPlot("dispatchPlot")
-      dispatch_dataset = self._template.find("DataObjects/DataSet[@name='dispatch']")
-      disp_plot.source = dispatch_dataset
-      disp_plot.macro_variable = case.get_year_name()
-      disp_plot.micro_variable = case.get_time_name()
-
-      signals = set()
-      for source in sources:
-        new = source.get_variable()
-        if new is not None:
-          signals.update(set(new))
-      disp_plot.signals = list(signals)
-
+      disp_plot = self._make_dispatch_plot(case, sources)
       self._add_snippet(disp_plot)
       debug_iostep.add_output(disp_plot)
 
     if case.debug["cashflow_plot"]:
-      cashflow_plot = TealCashFlowPlot("cashflow_plot")
-      cashflows = self._template.find("DataObjects/HistorySet[@name='cashflows']")
-      cashflow_plot.source = cashflows
+      cashflow_plot = self._make_cashflow_plot()
       self._add_snippet(cashflow_plot)
       debug_iostep.add_output(cashflow_plot)
 
-  def _initialize_runinfo(self, case: Case) -> RunInfo:
+    # Then, figure out how things will be sampled for the debug run.
+    # We need to handle 3 separate sampler configurations:
+    #   1. MonteCarlo sampler: Used for sampling from time series ROM and distributions for swept/optimized
+    #      capacities without a debug value and uncertain cashflow parameters.
+    #   2. CustomSampler sampler: Used for getting a static history from a CSV file.
+    #   3. EnsembleForward sampler: Used for combining the two where needed.
+    # If there is a MonteCarlo sampler being used, we'll add any constants (like capacities with debug values)
+    # there. Otherwise, if only a CustomSampler is used, we'll add them to the CustomSampler.
+
+    # What time series sources does our case have?
+    has_arma_source = any(s.is_type("ARMA") for s in sources)
+    has_csv_source = any(s.is_type("CSV") for s in sources)
+
+    # What variables need to be sampled and which are constants?
+    cap_vars, cap_consts = self._create_sampler_variables(case, components)  # capacities
+    has_sampled_capacities = len(cap_vars) > 0
+
+    # Are there any uncertain cashflow parameters which need to get sampled?
+    cashflow_vars, cashflow_dists = self._get_uncertain_cashflow_params(components)
+    has_uncertain_cashflows = len(cashflow_vars)
+
+    # Create the Monte Carlo sampler, if needed
+    if any([has_arma_source, has_sampled_capacities, has_uncertain_cashflows]):
+      # Okay, we know we need it, so let's make it.
+      monte_carlo = MonteCarlo("mc")
+
+      # Set number of samples for sampler
+      monte_carlo.denoises = case.get_num_samples()
+      monte_carlo.init_limit = case.get_num_samples()
+
+      # Set up case to use synthetic history ROM
+      if any(s.is_type("ARMA") for s in sources):
+        self._use_time_series_rom(monte_carlo, case, components, sources)
+
+      # Add capacities to sampler
+      for sampled_var, vals in cap_vars.items():
+        monte_carlo.add_variable(sampled_var)
+      for var_name, val in cap_consts.items():
+        monte_carlo.add_constant(var_name, val)
+
+      # Add uncertain cashflow parameters
+      if has_uncertain_cashflows:
+        vg_econ_uq = find_node(self._template, "VariableGroups/Group[@name='GRO_UQ']")  # type: VariableGroup
+        self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
+        self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
+        # Add the SampledVariable and Distribution nodes to the appropriate locations
+        for samp_var, dist in zip(cashflow_vars, cashflow_dists):
+          self._add_snippet(dist)
+          vg_econ_uq.variables.append(samp_var.name)
+          monte_carlo.add_variable(samp_var)
+    else:
+      monte_carlo = None
+
+    # The CustomSampler is only needed if there is a static history from CSV
+    if has_csv_source:
+      custom_sampler = self._create_custom_sampler(case, components, sources)
+    else:
+      custom_sampler = None
+
+    # If only a CustomSampler if being used, the capacity constants need to be added to the custom sampler
+    if monte_carlo is None and custom_sampler is not None:
+      for var_name, val in cap_consts.items():
+        custom_sampler.add_constant(var_name, val)
+
+    # If we need both the MonteCarlo sampler and the CustomSampler, add them both to an EnsembleForward sampler so they
+    # can be used together.
+    multirun_step = self._template.find("Steps/MultiRun[@name='debug']")
+    if monte_carlo and custom_sampler:
+      ensemble_sampler = EnsembleForward("ensemble_sampler")
+      ensemble_sampler.append(monte_carlo)
+      ensemble_sampler.append(custom_sampler)
+      self._add_snippet(ensemble_sampler)
+      multirun_step.add_sampler(ensemble_sampler)
+    elif monte_carlo is not None:
+      self._add_snippet(monte_carlo)
+      multirun_step.add_sampler(monte_carlo)
+    elif custom_sampler is not None:
+      self._add_snippet(custom_sampler)
+      multirun_step.add_sampler(custom_sampler)
+    else:
+      raise ValueError("Nothing that requires a sampler was found.")
+
+    # Add the model and file inputs to the main multirun step
+    multirun = self._template.find("Steps/MultiRun[@name='debug']")
+    model = self._template.find("Models/EnsembleModel") or self._template.find("Models/ExternalModel")
+    multirun.add_model(model)
+    for func in self._get_function_files(sources):
+      multirun.add_input(func)
+
+  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
     case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
     run_info = super()._initialize_runinfo(case, case_name)
 
@@ -101,13 +146,71 @@ class DebugTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
 
-  def _use_time_series_rom(self, case: Case, components: list[Component], sources: list[Placeholder]) -> Sampler:
-    # Create the ensemble model
+  def _create_custom_sampler(self, case: HeronCase, components: list[Component], sources: list[Source]) -> CustomSampler | None:
+    custom_sampler = CustomSampler("static_history_sampler")
+
+    time_indices = [case.get_year_name(), case.get_time_name(), self.namingTemplates["cluster_index"]]
+
+    for source in filter(lambda x: x.is_type("CSV"), sources):
+      # Add the source variables to the GRO_armasamples_in variable group
+      source_vars = source.get_variable()
+      self._template.find("VariableGroups/Group[@name='GRO_armasamples_in']").variables.extend(source_vars)
+
+      # Add CSV file reference to <Files>
+      csv_file = File(source.name)
+      csv_file.path = source._target_file
+      self._add_snippet(csv_file)
+
+      # Create a new <DataObject> that will store the csv data
+      csv_dataset = DataSet(source.name)
+      csv_dataset.inputs.extend([case.get_time_name(), case.get_year_name()])
+      csv_dataset.outputs.extend(source_vars)
+      for index in time_indices:
+        csv_dataset.add_index(index, source_vars)
+      self._add_snippet(csv_dataset)
+
+      # Use an IOStep to load the CSV data into the DataSet
+      read_static = IOStep(f"read_{csv_file.name}")
+      read_static.add_input(csv_file)
+      read_static.add_output(csv_dataset)
+      self._add_step_to_sequence(read_static, index=0)
+      self._add_snippet(read_static)
+
+      # Add variables to the custom sampler for the
+      custom_sampler.append(csv_dataset.to_assembler_node("Source"))
+      for var in itertools.chain(time_indices, source_vars):
+        if custom_sampler.find(f"variable[@name='{var}']") is None:
+          # NOTE: Being careful not to add duplicate time index variables to the custom sampler in case somebody tries
+          # to include multiple CSV sources.
+          custom_sampler.add_variable(SampledVariable(var))
+
+      # Add the time series cluster index to the HERON dispatch model
+      dispatcher = self._template.find("Models/ExternalModel[@name='dispatch']")  # type: HeronDispatchModel
+      if self.namingTemplates["cluster_index"] not in dispatcher.variables:
+        dispatcher.variables.append(self.namingTemplates["cluster_index"])
+
+    if custom_sampler.find("constant[@name='scaling']") is None:
+      custom_sampler.add_constant("scaling", 1.0)
+
+    return custom_sampler
+
+  def _use_time_series_rom(self, sampler: MonteCarlo, case: HeronCase, components: list[Component], sources: list[Source]):
+    """
+    Sets the workflow up to sample a time history from a PickledROM model
+    @ In sampler, MonteCarlo, a MonteCarlo sampler snippet
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], components in HERON case
+    @ In, sources, list[Source], external models, data, and functions
+    @ Out, None
+    """
+    # If a time series PickledROM is being used, it will need to be combined witht he HERON.DispatchManager external
+    # model with an EnsembleModel.
     ensemble = EnsembleModel("sample_and_dispatch")
     self._add_snippet(ensemble)
 
-    # Add Function sources as Files
-    functions = self._get_function_files(sources)
+    # Load the time series ROM(s) from file and add to the ensemble model.
+    # Includes steps to load and print metadata for the pickled time series ROMs
+    self._add_time_series_roms(ensemble, case, sources)
 
     # Fetch the dispatch model and add it to the ensemble. The model and associated data objects already exist
     # in the template XML, so we find those and add them to the model.
@@ -117,54 +220,14 @@ class DebugTemplate(RavenTemplate):
     # any function <Input> nodes, or it errors out. This is bad XML practice, which should be independent of order!
     disp_placeholder = self._template.find("DataObjects/PointSet[@name='dispatch_placeholder']")
     dispatcher_assemb.append(disp_placeholder.to_assembler_node("Input"))  # THIS COMES FIRST
-    for func in functions:
+    for func in self._get_function_files(sources):
       dispatcher_assemb.append(func.to_assembler_node("Input"))  # THEN ADD THESE
     disp_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")
     dispatcher_assemb.append(disp_eval.to_assembler_node("TargetEvaluation"))
     ensemble.append(dispatcher_assemb)
 
-    # Load the time series ROM(s) from file and add to the ensemble model.
-    self._add_time_series_roms(case, sources)  # Adds two IOStep for every ROM to load
-
-    # Figure out econ metrics are being used for the case
-    #   - econ metrics (from case obj), total activity variables (assembled from components list)
-    #   - add to output groups GRO_dispatch_out, GRO_armasamples_out_scalar
-    activity_vars = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
-    econ_vars = case.get_econ_metrics(nametype="output")
-    output_vars = econ_vars + activity_vars
-    self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']").variables.extend(output_vars)
-    self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']").variables.extend(output_vars)
-
-    # Figure out what result statistics are being used
-    #   - outer product of ({econ metrics (NPV, IRR, etc.)} U {activity variables "TotalActivity_*"}) x {statistics to use (mean, std, etc.)}
-    #     - NOTE: this part looks about identical to what was done in the outer
-    #     - Add these variables to GRO_final_return
-    #     - Make sure the objective function metric is in this group
-    results_vars = self._get_statistical_results_vars(case, components)
-    self._template.find("VariableGroups/Group[@name='GRO_final_return']").variables.extend(results_vars)
-
-    # A MonteCarlo sampler is used to sample from the time series ROM. Capacity values will be added as constants
-    # in the createWorkflow method.
-    mc = MonteCarlo("mc")
-    mc.add_constant("scaling", 1.0)
-    self._add_snippet(mc)
-
-    ###############
-    # Steps Setup #
-    ###############
-    # The template XML already has the debug MultiRun and debug_output IOStep steps in the sequence.
-
-    # Add the model, sampler, file inputs to the main multirun step
-    multirun = self._template.find("Steps/MultiRun[@name='debug']")
-    multirun.add_model(ensemble)
-    multirun.add_sampler(mc)
-    for func in functions:
-      multirun.add_input(func)
-
-    return mc
-
-  def _use_static_csv(self, case: Case, components: list[Component], sources: list[Placeholder]) -> Sampler:
-    raise NotImplementedError("Static histories for debug mode not yet implemented")
+    # A scaling constant needs to be added to the MonteCarlo sampler for the
+    sampler.add_constant("scaling", 1.0)
 
   def _update_vargroups(self, case, components, sources):
     # Fill out capacities vargroup
@@ -178,29 +241,28 @@ class DebugTemplate(RavenTemplate):
       case.get_year_name()
     ]
 
-    # expected dispatch, ARMA outputs
-    # -> dispatch results
-    group = self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']")
-    for component in components:
-      name = component.name
-      for tracker in component.get_tracking_vars():
-        resource_list = sorted(list(component.get_resources()))
-        for resource in resource_list:
-          var_name = self.namingTemplates["dispatch"].format(component=name, tracker=tracker, resource=resource)
-          group.variables.append(var_name)
+    # Dispatch variables
+    dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
+    group = self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
 
-    group = self._template.find("VariableGroups/Group[@name='GRO_cashflows']")
-    cfs = self._find_cashflows(components)
-    group.variables.extend(cfs)
+    # Cashflows
+    cfs = get_cashflow_names(components)
+    self._template.find("VariableGroups/Group[@name='GRO_cashflows']").variables.extend(cfs)
 
-    # -> time history sources
-    group = self._template.find("VariableGroups/Group[@name='GRO_debug_synthetics']")
-    for source in sources:
-      if source.is_type("ARMA") or source.is_type("CSV"):
-        synths = source.get_variable()
-        group.variables.extend(synths)
+    # Time history sources
+    group = self._template.find("VariableGroups/Group[@name='GRO_debug_synthetics']")  # type: VariableGroup
+    for source in filter(lambda x: x.type in ["ARMA", "CSV"], sources):
+      synths = source.get_variable()
+      group.variables.extend(synths)
 
-  def _update_dataset_indices(self, case: Case) -> None:
+    # Figure out which econ metrics are being used for the case
+    activity_vars = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
+    econ_vars = case.get_econ_metrics(nametype="output")
+    output_vars = econ_vars + activity_vars
+    self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']").variables.extend(output_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']").variables.extend(output_vars)
+
+  def _update_dataset_indices(self, case: HeronCase) -> None:
     # Configure dispatch DataSet indices
     time_name = case.get_time_name()
     year_name = case.get_year_name()
@@ -215,24 +277,24 @@ class DebugTemplate(RavenTemplate):
     for cluster_index in self._template.findall(".//DataSet/Index[@var='_ROM_Cluster']"):
       cluster_index.set("var", cluster_name)
 
-  @staticmethod
-  def _find_cashflows(components):
-    """
-      Loop through comps and collect all the full cashflow names
-      @ In, components, list, list of HERON Component instances for this run
-      @ Out, cfs, list, list of cashflow full names e.g. {comp}_{cf}_CashFlow
-    """
-    cfs = []
-    for comp in components:
-      comp_name = comp.name
-      for cashflow in comp.get_cashflows():
-        # User has specified to leave this cashflow out of the NPV calculation. Skip it.
-        if cashflow.is_npv_exempt():
-          continue
-        cf_name = cashflow.name
-        name = f"{comp_name}_{cf_name}_CashFlow"
-        cfs.append(name)
-        if cashflow.get_depreciation() is not None:
-          cfs.append(f"{comp_name}_{cf_name}_depreciation")
-          cfs.append(f"{comp_name}_{cf_name}_depreciation_tax_credit")
-    return cfs
+  def _make_dispatch_plot(self, case: HeronCase, sources: list[Source]) -> HeronDispatchPlot:
+    disp_plot = HeronDispatchPlot("dispatchPlot")
+    dispatch_dataset = self._template.find("DataObjects/DataSet[@name='dispatch']")
+    disp_plot.source = dispatch_dataset
+    disp_plot.macro_variable = case.get_year_name()
+    disp_plot.micro_variable = case.get_time_name()
+
+    signals = set()
+    for source in sources:
+      new = source.get_variable()
+      if new is not None:
+        signals.update(set(new))
+    disp_plot.signals = list(signals)
+
+    return disp_plot
+
+  def _make_cashflow_plot(self) -> TealCashFlowPlot:
+    cashflow_plot = TealCashFlowPlot("cashflow_plot")
+    cashflows = self._template.find("DataObjects/HistorySet[@name='cashflows']")
+    cashflow_plot.source = cashflows
+    return cashflow_plot
