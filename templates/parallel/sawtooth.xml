@@ -1,0 +1,11 @@
+<parallel hostregexp="sawtooth[12].*">
+  <useParallel>
+    <mode>
+      mpi
+      <runQSUB />
+    </mode>
+  </useParallel>
+  <outer>
+    <parallelMethod>ray</parallelMethod>
+  </outer>
+</parallel>

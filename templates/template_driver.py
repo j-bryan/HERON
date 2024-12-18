@@ -10,6 +10,9 @@ import copy
 import shutil
 import xml.etree.ElementTree as ET
 import itertools as it
+import socket
+import glob
+import re
 
 import numpy as np
 import dill as pk
@@ -237,6 +240,23 @@ class Template(TemplateBase, Base):
     elif case.get_mode() == 'opt':
       template.find('Samplers').remove(template.find(".//Grid[@name='grid']"))
 
+  def _get_parallel_xml(self, hostname):
+    """
+      Finds the xml file to go with the given hostname.
+      @ In, hostname, string with the hostname to search for
+      @ Out, xml, xml.eTree.ElementTree or None, if an xml file is found then use it, otherwise return None
+    """
+    # Should this allow loading from another directory (such as one
+    #  next to the input file?)
+    path = os.path.join(os.path.dirname(__file__),"parallel","*.xml")
+    filenames = glob.glob(path)
+    for filename in filenames:
+      cur_xml = ET.parse(filename).getroot()
+      regexp = cur_xml.attrib['hostregexp']
+      if re.match(regexp, hostname):
+        return cur_xml
+    return None
+
   def _modify_outer_runinfo(self, template, case):
     """
       Defines modifications to the RunInfo of outer.xml RAVEN input file.
@@ -257,15 +277,26 @@ class Template(TemplateBase, Base):
     elif case.get_mode() == 'opt':
       run_info.find('Sequence').text = 'optimize, plot'
     # parallel
+    # Should there be a way to override the hostname (such as if we are
+    #  generating the files to run on a different computer?)
+    hostname = socket.gethostbyaddr(socket.gethostname())[0]
+    self.parallel_xml = self._get_parallel_xml(hostname)
+    #note, parallel_xml might be None
     if case.outerParallel:
-      # set outer batchsize and InternalParallel
-      batchSize = run_info.find('batchSize')
-      batchSize.text = f'{case.outerParallel}'
-      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
+      self._modify_outer_parallel(template, case)
     if case.useParallel:
-      #XXX this doesn't handle non-mpi modes like torque or other custom ones
-      mode = xmlUtils.newNode('mode', text='mpi')
-      mode.append(xmlUtils.newNode('runQSUB'))
+      if self.parallel_xml is None:
+        #this doesn't handle non-mpi modes like torque or other custom ones
+        # so it is highly recommended that a parallel xml template be created
+        # for hosts that are using those.
+        mode = xmlUtils.newNode('mode', text='mpi')
+        mode.append(xmlUtils.newNode('runQSUB'))
+      else:
+        for child in self.parallel_xml.find('useParallel'):
+          if child.tag == 'mode':
+            mode = child
+          else:
+            run_info.append(child)
       if 'memory' in case.parallelRunInfo:
         mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
       for sub in case.parallelRunInfo:
@@ -273,6 +304,26 @@ class Template(TemplateBase, Base):
       run_info.append(mode)
     if case.innerParallel:
       run_info.append(xmlUtils.newNode('NumMPI', text=case.innerParallel))
+
+  def _modify_outer_parallel(self, template, case):
+    """
+      Modifies the outer parallel stuff. This should only be called if
+      case.outerparallel > 0
+      @ In, template, xml.etree.ElementTree.Element, root of XML to modify
+      @ In, case, HERON Case, defining Case instance
+      @ Out, None
+
+    """
+    run_info = template.find('RunInfo')
+    # set outer batchsize and InternalParallel
+    batchSize = run_info.find('batchSize')
+    batchSize.text = f'{case.outerParallel}'
+    if self.parallel_xml is None:
+      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
+    else:
+      #append all the children in the 'outer' element
+      for child in self.parallel_xml.find('outer'):
+        run_info.append(child)
 
   def _modify_outer_vargroups(self, template, case, components, sources):
     """
@@ -703,12 +754,8 @@ class Template(TemplateBase, Base):
       #XXX if we had a way to calculate this ahead of time,
       # this could be done in _modify_outer_runinfo
       #Need to update the outerParallel number
-      run_info = template.find('RunInfo')
       case.outerParallel = len(self.__sweep_vars) + 1
-      #XXX duplicate of code in _modify_outer_runinfo
-      batchSize = run_info.find('batchSize')
-      batchSize.text = f'{case.outerParallel}'
-      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
+      self._modify_outer_parallel(template, case)
 
   def _modify_outer_optimizers(self, template, case):
     """
