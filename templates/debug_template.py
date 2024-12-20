@@ -191,7 +191,7 @@ class DebugTemplate(RavenTemplate):
 
     # Dispatch variables
     dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
-    group = self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
 
     # Cashflows
     cfs = get_cashflow_names(components)
@@ -231,14 +231,7 @@ class DebugTemplate(RavenTemplate):
     disp_plot.source = dispatch_dataset
     disp_plot.macro_variable = case.get_year_name()
     disp_plot.micro_variable = case.get_time_name()
-
-    signals = set()
-    for source in sources:
-      new = source.get_variable()
-      if new is not None:
-        signals.update(set(new))
-    disp_plot.signals = list(signals)
-
+    disp_plot.signals.append("GRO_debug_synthetics")
     return disp_plot
 
   def _make_cashflow_plot(self) -> TealCashFlowPlot:

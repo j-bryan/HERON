@@ -11,7 +11,7 @@ from .imports import Base
 from .types import HeronCase, Component, Source
 from .raven_template import RavenTemplate
 from .bilevel_templates import BilevelTemplate
-from .flat_templates import FlatMultiConfigTemplateSweep
+from .flat_templates import FlatMultiConfigTemplate
 from .debug_template import DebugTemplate
 
 
@@ -35,27 +35,17 @@ class TemplateDriver(Base):
     @ Out, None
     """
     if case.debug["enabled"]:
-      # Debug mode runs a workflow with fixed capacities. Both
+      # Debug mode runs a workflow with fixed capacities with lots of outputs to help determine if a simulation has
+      # been correctly specified.
       self.template = DebugTemplate()
-    elif self._has_only_static_history(sources) and not self._has_uncertain_econ_params(components):
+    elif self._has_only_static_history(sources) \
+         and self._number_of_static_history_samples(case, sources) == 1 \
+         and not self._has_uncertain_econ_params(components) \
+         and case.get_mode() == "sweep":
       # Fixed history workflow: only run the dispatch optimization once per capacity configuration.
-      # This requires the time history source to be fixed (static history) and for there to be no uncertain economic
-      # parameters.
-      # TODO: Add support for uncertain economic parameters which do not affect the system dispatch. There is no
-      #       mathematical reason why the uncertainty contributions of those parameters couldn't be included in a
-      #       flat workflow of this type, but HERON is just not set up to make the distinction in uncertain economic
-      #       parameters and quantiy accordingly. If workflows like this become commonly used, adding this support
-      #       for a flat workflow should speed up the code significantly!
-      # FIXME: Assumes only 1 history in static history CSV
-      # FIXME: Assumes CSV source's only purpose is providing a static history
-      mode = case.get_mode()
-      if mode == "sweep":
-        self.template = FlatMultiConfigTemplateSweep()
-      elif mode == "opt":
-        # self.template = FlatMultiConfigTemplateOpt()  # TODO
-        self.template = BilevelTemplate(case, sources)  # fall back on the bilevel formulation
-      else:
-        raise ValueError(f"Mode '{mode} is unsupported for flat multi-configuration workflows.")
+      # This is quite a restrictive case due to some limitations in how sampling and post-processing is done in
+      # RAVEN.
+      self.template = FlatMultiConfigTemplate()
     elif self._has_all_capacities_fixed(components):
       # Fixed configuration workflow: analyze a fixed system configuration over many synthetic histories.
       # This is like a generalization of debug mode. All types of uncertain economic parameters can be accommodated
@@ -65,6 +55,10 @@ class TemplateDriver(Base):
     else:
       # Use the bilevel problem formulation. Outer workflow samples component capacities and uncertain economic
       # parameters. Inner workflow performs dispatch optimization over multiple synthetic histories.
+      # This catches a large number of cases that are not easily done in a flat workflow in RAVEN:
+      #   - Multiple histories and capacity configurations (PostProcessor won't calculate statistics for each capacity)
+      #   - Any opt mode case (can't specify both a sampler and an optimizer in a MultiRun step)
+      #   -
       self.template = BilevelTemplate(case, sources)
 
     self.template.loadTemplate()
@@ -123,3 +117,18 @@ class TemplateDriver(Base):
       if len(component.get_uncertain_cashflow_params()) > 0:
         return True
     return False
+
+  @staticmethod
+  def _number_of_static_history_samples(case: HeronCase, sources: list[Source]) -> int:
+    """
+    Gets the maximum number of static history samples among CSV sources
+    @ In, case, HeronCase, the case object
+    @ In, source, list[Source], file sources
+    @ Out, num_samples, int, number of static history samples
+    """
+    return max(
+      map(
+        lambda x: x.get_structure(case)["num_samples"],
+        filter(lambda x: x.type == "CSV", sources)
+      ),
+    )

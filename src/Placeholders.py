@@ -8,6 +8,7 @@ import os
 import sys
 import abc
 import copy
+import functools
 
 import HERON.src._utils as hutils
 from HERON.src.base import Base
@@ -478,7 +479,6 @@ class CSV(Placeholder):
     self.eval_mode = "full"
     self.needs_multiyear = 1
     self.limit_interp = 1
-    self._num_samples = 1
 
   def read_input(self, xml):
     """
@@ -506,7 +506,7 @@ class CSV(Placeholder):
       @ Out, None
     """
     self.raiseAMessage(f'Checking CSV at "{self._target_file}"')
-    structure = hutils.get_csv_structure(self._target_file, case.get_year_name(), case.get_time_name())
+    structure = self.get_structure(case)
     interpolated = 'macro' in structure
     clustered = bool(structure['clusters'])
     # segmented = bool(structure['segments']) # TODO
@@ -534,3 +534,14 @@ class CSV(Placeholder):
           f'"{self.name}" will be extended to project life ({project_life}) macro steps using <Multicycle>.'
       )
       self.needs_multiyear = project_life
+
+  @functools.cache
+  def get_structure(self, case) -> dict:
+    """
+    Reads the CSV file to determine the structure of the time series samples it contains.
+    @ In, None
+    @ Out, structure, dict, the number of samples
+    """
+    # NOTE: The result is cached to avoid needing to read the CSV file repeatedly, and the caching is done here in the
+    # Placeholder instead of the utility function so the caching is done on a per-file basis.
+    return hutils.get_csv_structure(self._target_file, case.get_year_name(), case.get_time_name())

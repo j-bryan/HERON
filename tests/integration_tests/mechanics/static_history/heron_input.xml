@@ -14,11 +14,11 @@
       <num_arma_samples>3</num_arma_samples>
       <time_discretization>
         <time_variable>Time</time_variable>
-        <end_time>4</end_time>
-        <num_steps>5</num_steps>
+        <end_time>2</end_time>
+        <num_steps>21</num_steps>
       </time_discretization>
       <economics>
-        <ProjectTime>2</ProjectTime>
+        <ProjectTime>3</ProjectTime>
         <DiscountRate>0.08</DiscountRate>
         <tax>0.0</tax>
         <inflation>0.03</inflation>
@@ -87,7 +87,16 @@
           </capacity>
         </demands>
         <economics>
-          <lifetime>2</lifetime>
+          <lifetime>30</lifetime>
+          <CashFlow name="sales" type="repeating" taxable="False" inflation="none">
+            <driver>
+              <activity>a</activity>
+            </driver>
+            <reference_price>
+              <fixed_value>10.0</fixed_value>
+              <multiplier>-3.14</multiplier>
+            </reference_price>
+          </CashFlow>
         </economics>
       </Component>
     </Components>

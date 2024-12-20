@@ -34,11 +34,11 @@
     <Group name="GRO_dispatch_in_Time"/>
     <Group name="GRO_full_dispatch"/>
     <Group name="GRO_full_dispatch_indices">GRO_time_indices</Group>
-    <Group name="GRO_armasamples">GRO_armasamples_in, GRO_armasamples_out</Group>
-    <Group name="GRO_armasamples_in">GRO_armasamples_in_scalar</Group>
-    <Group name="GRO_armasamples_out">GRO_armasamples_out_scalar</Group>
-    <Group name="GRO_armasamples_in_scalar">scaling, GRO_capacities</Group>
-    <Group name="GRO_armasamples_out_scalar"/>
+    <Group name="GRO_timeseries">GRO_timeseries_in, GRO_timeseries_out</Group>
+    <Group name="GRO_timeseries_in">GRO_timeseries_in_scalar</Group>
+    <Group name="GRO_timeseries_out">GRO_timeseries_out_scalar</Group>
+    <Group name="GRO_timeseries_in_scalar">scaling, GRO_capacities</Group>
+    <Group name="GRO_timeseries_out_scalar"/>
     <Group name="GRO_time_indices"/>
     <Group name="GRO_cashflows"/>
   </VariableGroups>
@@ -77,7 +77,7 @@
 
   <Models>
     <ExternalModel name="dispatch" subType="HERON.DispatchManager">
-      <variables>GRO_dispatch, GRO_armasamples, GRO_full_dispatch, GRO_full_dispatch_indices, GRO_cashflows, cfYears</variables>
+      <variables>GRO_dispatch, GRO_timeseries, GRO_full_dispatch, GRO_full_dispatch_indices, GRO_cashflows, cfYears</variables>
     </ExternalModel>
   </Models>
 

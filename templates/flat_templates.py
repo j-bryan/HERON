@@ -3,20 +3,20 @@ from .types import HeronCase, Component, Source
 
 from .raven_template import RavenTemplate
 
-from .snippets.dataobjects import DataObject, PointSet
-from .snippets.outstreams import PrintOutStream
-from .snippets.samplers import Sampler, CustomSampler, EnsembleForward, Grid
+from .snippets.dataobjects import PointSet
+from .snippets.samplers import CustomSampler, EnsembleForward, Grid
 from .snippets.steps import MultiRun
 from .snippets.variablegroups import VariableGroup
 
-from .naming_utils import get_capacity_vars, get_component_activity_vars
+from .naming_utils import get_capacity_vars
 
 
 class FlatMultiConfigTemplate(RavenTemplate):
   """
-  A template for RAVEN workflows which do not consider uncertaintyfrom .ources which affect the system dispatch (one time
+  A template for RAVEN workflows which do not consider uncertainty from sources which affect the system dispatch (one time
   history, no uncertain variable costs for dispatchable components). Many system configurations may be considered.
   """
+  template_path = Path("xml/flat_multi_config.xml")
   write_name = Path("outer.xml")
 
   # With static histories, the stats that are used shouldn't require multiple samples. Therefore, we drop the
@@ -37,39 +37,6 @@ class FlatMultiConfigTemplate(RavenTemplate):
     results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_results']")  # type: VariableGroup
     results_vars = self._get_deterministic_results_vars(case, components)
     results_vargroup.variables.extend(results_vars)
-
-  def _initialize_runinfo(self, case: HeronCase) -> None:
-    """
-    Initializes the RunInfo node of the workflow
-    @ In, case, Case, the HERON Case object
-    @ Out, None
-    """
-    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
-    run_info = super()._initialize_runinfo(case, case_name)
-
-    # parallel
-    if case.outerParallel:
-      # set outer batchsize and InternalParallel
-      run_info.batch_size = case.outerParallel
-      run_info.internal_parallel = True
-    else:
-      run_info.batch_size = 1
-
-    if case.useParallel:
-      #XXX this doesn't handle non-mpi modes like torque or other custom ones
-      run_info.set_parallel_run_settings(case.parallelRunInfo)
-
-
-class FlatMultiConfigTemplateSweep(FlatMultiConfigTemplate):
-  """
-  A template for RAVEN workflows which do not consider uncertainty from sources which affect the system dispatch (one time
-  history, no uncertain variable costs for dispatchable components). Many system configurations may be considered.
-  """
-  template_path = Path("xml/flat_multi_config_sweep.xml")
-  write_name = Path("outer.xml")
-
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
-    super().createWorkflow(case, components, sources)
 
     # Define a sampler for handling the static history
     static_hist_sampler = self._template.find("Samplers/EnsembleForward/CustomSampler")  # type: CustomSampler
@@ -109,3 +76,24 @@ class FlatMultiConfigTemplateSweep(FlatMultiConfigTemplate):
     # was not specified before.
     if case.outerParallel == 0 and case.useParallel:
       self._update_batch_size(case)
+
+  def _initialize_runinfo(self, case: HeronCase) -> None:
+    """
+    Initializes the RunInfo node of the workflow
+    @ In, case, Case, the HERON Case object
+    @ Out, None
+    """
+    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    run_info = super()._initialize_runinfo(case, case_name)
+
+    # parallel
+    if case.outerParallel:
+      # set outer batchsize and InternalParallel
+      run_info.batch_size = case.outerParallel
+      run_info.internal_parallel = True
+    else:
+      run_info.batch_size = 1
+
+    if case.useParallel:
+      #XXX this doesn't handle non-mpi modes like torque or other custom ones
+      run_info.set_parallel_run_settings(case.parallelRunInfo)
