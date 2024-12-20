@@ -33,7 +33,7 @@ class Database(RavenSnippet):
   @listproperty
   def variables(self) -> list[str]:
     node = self.find("variables")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", []) 
 
   @variables.setter
   def variables(self, value: list[str]) -> list[str]:

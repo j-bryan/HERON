@@ -1,18 +1,14 @@
 """
 Alias types of major HERON classes for easier type hinting
 """
-import sys
-import os
 from typing import TypeAlias
 
 # load utils
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-import HERON.src._utils as hutils
-from HERON.src.Cases import Case
-from HERON.src.Components import Component
-from HERON.src.Placeholders import Placeholder
-from HERON.src.ValuedParams import ValuedParam
-sys.path.pop()
+from .imports import Case, Placeholder, Component, ValuedParam
+
+from .snippets import RavenSnippet
 
 HeronCase: TypeAlias = Case
 Source: TypeAlias = Placeholder
+
+ListLike = list | tuple | set  # iterable but not a mapping (e.g. a dict) and not a string

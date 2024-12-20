@@ -4,16 +4,13 @@ from typing import Any
 import xml.etree.ElementTree as ET
 
 from .types import HeronCase, Component
-from .snippets.factory import factory as snippet_factory
-from .snippets.samplers import SampledVariable
-from .snippets.distributions import Distribution
 
 
 @dataclass(frozen=True)
 class Statistic:
   """
   A dataclass for building statistic names and ET.Elements. Hopefully this helps cut down repeated parsing of variable
-  names and statistis meta info from case.
+  names and statistis meta infofrom .ase.
   """
   name: str
   prefix: str
@@ -70,32 +67,6 @@ def get_statistics(stat_names: list[str], stat_meta: dict) -> list[Statistic]:
 
   return stats
 
-def get_stat_prefixes(stat_names: list[str], case) -> list[str]:
-  """
-  Get all statistics prefixes for a list of statistic names
-  @ In, stat_names, list[str], names of statistics
-  @ In, case, Case, HERON case
-  @ Out, stat_prefixes, list[str], list of statistics prefixes
-  """
-  stat_prefixes = []
-  for stat in stat_names:
-    stat_meta = case.stats_metrics_meta[stat]
-    prefix = stat_meta["prefix"]
-
-    # Are there additional attributes? If so, we need to loop over these.
-    stat_attribs = {k: stat_meta[k] for k in stat_meta.keys() & {"percent", "threshold"}}
-
-    if not stat_attribs:
-      stat_prefixes.append(prefix)
-    else:
-      for val in stat_attribs.values():
-        if isinstance(val, list):
-          stat_prefixes.extend([f"{prefix}_{v}" for v in val])
-        else:
-          stat_prefixes.append(f"{prefix}_{val}")
-
-  return stat_prefixes
-
 def get_result_stats(names: list[str], stats: list[str], case: HeronCase) -> list[str]:
   """
     Constructs the names of the statistics requested for output
@@ -124,8 +95,8 @@ def get_capacity_vars(components: list[Component], name_template, *, debug=False
     # treat capacity
     ## we just need to make sure everything we need gets into the dispatch ensemble model.
     ## For each interaction of each component, that means making sure the Function, ARMA, or constant makes it.
-    ## Constants from outer (namely sweep/opt capacities) are set in the MC Sampler from the outer
-    ## The Dispatch needs info from the Outer to know which capacity to use, so we can't pass it from here.
+    ## Constantsfrom .uter (namely sweep/opt capacities) are set in the MC Samplerfrom .he outer
+    ## The Dispatch needs infofrom .he Outer to know which capacity to use, so we can't pass itfrom .ere.
     capacity = component.get_capacity(None, raw=True)
 
     if capacity.is_parametric():

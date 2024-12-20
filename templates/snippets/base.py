@@ -1,11 +1,13 @@
 from typing import Any
+import itertools as it
 import xml.etree.ElementTree as ET
 
 from ..xml_utils import merge_trees
+from ..decorators import listproperty
 
 class RavenSnippet(ET.Element):
   """
-  RavenSnippet class objects describe one contiguous snippet of RAVEN XML, inheriting from the xml.etree.ElementTree.Element
+  RavenSnippet class objects describe one contiguous snippet of RAVEN XML, inheritingfrom .he xml.etree.ElementTree.Element
   class. This base class contains methods for quickly building subtrees and set and access common RAVEN node attributes.
   """
   tag = None  # XML tag associated with the snippet class
@@ -15,7 +17,7 @@ class RavenSnippet(ET.Element):
   @classmethod
   def from_xml(cls, node: ET.Element, **kwargs) -> "RavenSnippet":
     """
-    Alternate constructor which instantiates a new RavenSnippet object from an existing XML node
+    Alternate constructor which instantiates a new RavenSnippet objectfrom .n existing XML node
     @ In, node, ET.Element, the template node
     @ In, kwargs, dict, keyword arguments
     @ Out, snippet, RavenSnippet, the new snippet
@@ -90,7 +92,7 @@ class RavenSnippet(ET.Element):
     @ In, tag, str, the tag of the child node
     @ In, value, Any, the value of the child node
     """
-    # If the value inherits from ET.Element, we can append the value to the parent directly.
+    # If the value inheritsfrom .T.Element, we can append the value to the parent directly.
     if isinstance(value, ET.Element):
       parent.append(value)
     # If the value happens to be another entity, it has its own to_xml method. Use that instead of manually
@@ -116,7 +118,7 @@ class RavenSnippet(ET.Element):
   # Other utility functions
   def to_assembler_node(self, tag: str) -> ET.Element:
     """
-    Creates an assembler node from the snippet, if possible. The "class" attribute must be defined.
+    Creates an assembler nodefrom .he snippet, if possible. The "class" attribute must be defined.
     @ In, tag, str, assembler node tag
     """
     if not (self.snippet_class and self.name):

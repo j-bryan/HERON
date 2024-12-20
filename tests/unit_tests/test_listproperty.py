@@ -8,6 +8,7 @@ Unit tests for the listproperty decorator
 import sys
 import os
 import unittest
+import xml.etree.ElementTree as ET
 
 # Load HERON tools
 HERON_LOC = os.path.abspath(os.path.join(os.path.dirname(__file__), *[os.pardir]*3))
@@ -17,7 +18,8 @@ from HERON.templates.decorators import listproperty
 sys.path.pop()
 
 
-class ListPropertyTester:
+class MockListPropertyUser:
+  """ A minimal class implementing an attribute as a listproperty """
   def __init__(self):
     self._list = []
 
@@ -30,9 +32,23 @@ class ListPropertyTester:
     self._list = lst
 
 
+class MockListPropertyETUser:
+  """ A minimal class wrapping an ET.Element object's text attribute with a listproperty """
+  def __init__(self):
+    self.node = ET.Element("test_element")
+
+  @listproperty
+  def prop(self) -> list[str]:
+    return getattr(self.node, "text", []) or []
+
+  @prop.setter
+  def prop(self, value: list[str]) -> None:
+    self.node.text = value
+
+
 class TestListProperty(unittest.TestCase):
   def setUp(self):
-    self.tester = ListPropertyTester()
+    self.tester = MockListPropertyUser()
 
   def test_get(self):
     self.assertListEqual(self.tester.prop, [])
@@ -114,3 +130,27 @@ class TestListProperty(unittest.TestCase):
     lst_sorted = sorted(lst)
     self.tester.prop.sort()
     self.assertListEqual(self.tester.prop, lst_sorted)
+
+
+class TestListPropertyXML(unittest.TestCase):
+  """
+  Unit tests for the listproperty decorator wrapping an ET.Element object. This closely mimics how the listproperty
+  decorator is used in practice in HERON.templates. The focus here is to test how the listproperty behaves when the
+  ET.Element text is set directly with a string, then is accessed and modified through the listproperty.
+  """
+  def setUp(self):
+    self.tester = MockListPropertyETUser()
+
+  def test_get_unset(self):
+    self.assertIsInstance(self.tester.prop, list)
+    self.assertListEqual(self.tester.prop, [])
+
+  def test_set_with_string(self):
+    self.tester.node.text = "text without commas"
+    self.assertIsInstance(self.tester.prop, list)
+    self.assertListEqual(self.tester.prop, ["text without commas"])
+
+  def test_set_with_string_list(self):
+    self.tester.node.text = "val1, val2,val3,    val4  "  # intentionally ugly spacing and extra whitespace
+    self.assertIsInstance(self.tester.prop, list)
+    self.assertListEqual(self.tester.prop, ["val1", "val2", "val3", "val4"])

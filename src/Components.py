@@ -331,6 +331,17 @@ class Component(Base, CashFlowUser):
       resource = cf.get_driver()._vp.get_resource()
       self.levelized_meta[cf.name] = {tracker:resource}
 
+  def get_uncertain_cashflow_params(self):
+    """
+      Get all uncertain economic parameters
+      @ In, None
+      @ Out, params, dict, the uncertain parameters
+    """
+    params = {}
+    for cf in self.get_cashflows():
+      uncertain = cf.get_uncertain_params()
+      params |= {f"{self.name}_{k}": v for k, v in uncertain.items()}
+    return params
 
 
 class Interaction(Base):

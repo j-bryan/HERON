@@ -16,9 +16,15 @@ class Step(RavenSnippet):
     if tag not in self._allowed_subs:
       raise ValueError(f"Step type {self.tag} does not accept subelements with tag {tag}. Allowed: {self._allowed_subs}.")
 
-    # Create an Assembler node from the entity
+    # Create an Assembler nodefrom .he entity
     # NOTE: The entity snippet must have defined "class" and "name" attributes
     node = entity.to_assembler_node(tag)
+
+    # Is the entity already serving this role in the step? Check so no duplicates are added.
+    for sub in self.findall(tag):
+      if sub.attrib == node.attrib and sub.text == node.text:
+        return
+
     # Where to insert the node? Let's do it in order to keep things pretty.
     for i, sub in enumerate(self):  # linear search over subelements since there won't be that many
       if self._allowed_subs.index(sub.tag) > self._allowed_subs.index(node.tag):

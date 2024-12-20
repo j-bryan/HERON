@@ -1,3 +1,35 @@
+"""
+Decorators
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
+from typing import Any
+
+
+def _coerce_to_list(value: Any) -> list[Any]:
+  """
+  Try to make value a list that makes sense. Special handling for strings is taken to avoid splitting a
+  string into characters. If commas are present in the string, it is assumed the string has comma-delimited
+  values.
+  @ In, value, Any, the value to coerce
+  @ Out, coerced, list[Any], the coerced value object
+  """
+  if not value:
+    # empty Collections (list, set, tuple, str, dict, ...) or None are all falsy
+    coerced = []
+  elif isinstance(value, str):
+    # strings: either a comma-delimited list of values in the string or just a single item
+    if "," in value:
+      coerced = [s.strip() for s in value.split(",")]
+    else:
+      coerced = [value]
+  else:
+    # Just try coercing to a list otherwise and hope for the best. This should work without throwing
+    # an exception for anything iterable.
+    coerced = list(value)
+  return coerced
+
+
 class ListWrapper(list):
   """
   A wrapper class which emulates a list (and subclasses list for duck typing) which interfaces with a property
@@ -7,10 +39,10 @@ class ListWrapper(list):
     self.obj = obj
 
   def _get_list(self):
-    return self.property_instance.fget(self.obj)
+    return _coerce_to_list(self.property_instance.fget(self.obj))
 
   def _set_list(self, value):
-    self.property_instance.fset(self.obj, value)
+    self.property_instance.fset(self.obj, _coerce_to_list(value))
 
   def __getitem__(self, index):
     return self._get_list()[index]
@@ -46,12 +78,13 @@ class ListWrapper(list):
     self._set_list(lst)
 
   def pop(self, index=-1):
-    return self._get_list().pop(index)
+    lst = self._get_list()
+    val = lst.pop(index)
+    self._set_list(lst)
+    return val
 
   def clear(self):
-    lst = self._get_list()
-    lst.clear()
-    self._set_list(lst)
+    self._set_list([])
 
   def index(self, value):
     return self._get_list().index(value)
@@ -110,16 +143,11 @@ class listproperty:
       return self
     if self.fget is None:
       raise AttributeError("unreadable attribute")
-    value = self.fget(obj)
-    if isinstance(value, list):
-      return ListWrapper(self, obj)
-    return value
+    return ListWrapper(self, obj)
 
   def __set__(self, obj, value):
     if self.fset is None:
       raise AttributeError("can't set attribute")
-    if not isinstance(value, list):
-      raise TypeError("listproperty setter expects a list value")
     self.fset(obj, value)
 
   def __delete__(self, obj):

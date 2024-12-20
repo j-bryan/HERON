@@ -15,7 +15,7 @@ class Distribution(RavenSnippet):
 
 def distribution_class_from_spec(spec):
   """
-  Make a new distribution class from the RAVEN input spec for that class
+  Make a new distribution classfrom .he RAVEN input spec for that class
   @ In, spec, RAVEN input spec
   @ Out, distribution, NewDistribution, the new distribution class
   """

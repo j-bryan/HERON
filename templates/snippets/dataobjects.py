@@ -11,7 +11,7 @@ class DataObject(RavenSnippet):
   @listproperty
   def inputs(self) -> list[str]:
     node = self.find("Input")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", [])
 
   @inputs.setter
   def inputs(self, value: list[str]) -> None:
@@ -20,7 +20,7 @@ class DataObject(RavenSnippet):
   @listproperty
   def outputs(self) -> list[str]:
     node = self.find("Output")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", [])
 
   @outputs.setter
   def outputs(self, value: list[str]) -> None:

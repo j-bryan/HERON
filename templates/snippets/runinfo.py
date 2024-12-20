@@ -78,7 +78,7 @@ class RunInfo(RavenSnippet):
   @listproperty
   def sequence(self) -> list[str]:
     node = self.find("Sequence")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", []) 
 
   @sequence.setter
   def sequence(self, value: list[str | Step]) -> None:

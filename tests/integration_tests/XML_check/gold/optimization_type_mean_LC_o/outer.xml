@@ -102,14 +102,14 @@
   </Optimizers>
 
   <OutStreams>
-    <Plot name="opt_path" subType="OptPath">
-      <source>opt_soln</source>
-      <vars>GRO_capacities, mean_LC_Mult</vars>
-    </Plot>
     <Print name="opt_soln">
       <type>csv</type>
       <source>opt_soln</source>
       <clusterLabel>trajID</clusterLabel>
     </Print>
+    <Plot name="opt_path" subType="OptPath">
+      <source>opt_soln</source>
+      <vars>GRO_capacities, mean_LC_Mult</vars>
+    </Plot>
   </OutStreams>
 </Simulation>

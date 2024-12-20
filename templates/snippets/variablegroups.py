@@ -19,7 +19,7 @@ class VariableGroup(RavenSnippet):
 
   @listproperty
   def variables(self) -> list[str]:
-    return self.text or []
+    return self.text 
 
   @variables.setter
   def variables(self, value: list[str]) -> None:

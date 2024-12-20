@@ -44,7 +44,7 @@ class OptPathPlot(OutStream):
   @listproperty
   def variables(self) -> list[str]:
     node = self.find("vars")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", []) 
 
   @variables.setter
   def variables(self, value: list[str]) -> None:
@@ -53,6 +53,17 @@ class OptPathPlot(OutStream):
 class HeronDispatchPlot(OutStream):
   tag = "Plot"
   subtype = "HERON.DispatchPlot"
+
+  @classmethod
+  def from_xml(cls, node: ET.Element) -> "HeronDispatchPlot":
+    plot = cls()
+    plot.attrib |= node.attrib
+    for sub in node:
+      if sub.tag == "signals":
+        plot.signals = [s.strip() for s in sub.text.split(",")]
+      else:
+        plot.append(sub)
+    return plot
 
   @property
   def macro_variable(self) -> str | None:
@@ -75,7 +86,7 @@ class HeronDispatchPlot(OutStream):
   @listproperty
   def signals(self) -> list[str]:
     node = self.find("signals")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", []) 
 
   @signals.setter
   def signals(self, value: list[str]) -> None:

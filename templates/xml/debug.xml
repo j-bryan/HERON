@@ -1,4 +1,4 @@
-<Simulation verbosity='all'>
+<Simulation verbosity="all">
   <RunInfo>
     <JobName></JobName>
     <WorkingDir>.</WorkingDir>
@@ -8,7 +8,7 @@
 
   <Steps>
     <MultiRun name="debug">
-      <Input class='DataObjects' type='PointSet'>dispatch_placeholder</Input>
+      <Input class="DataObjects" type="PointSet">dispatch_placeholder</Input>
       <Output class="DataObjects" type="DataSet">dispatch</Output>
       <Output class="DataObjects" type="HistorySet">cashflows</Output>
     </MultiRun>
@@ -26,19 +26,19 @@
 
   <VariableGroups>
     <Group name="GRO_capacities"/>
-    <Group name='GRO_debug_synthetics'></Group>
-    <Group name='GRO_dispatch'>GRO_dispatch_in, GRO_dispatch_out, GRO_time_indices</Group>
-    <Group name='GRO_dispatch_in'>GRO_dispatch_in_scalar, GRO_dispatch_in_Time</Group>
-    <Group name='GRO_dispatch_out'/>
-    <Group name='GRO_dispatch_in_scalar' >GRO_capacities, scaling</Group>
-    <Group name='GRO_dispatch_in_Time'/>
+    <Group name="GRO_debug_synthetics"></Group>
+    <Group name="GRO_dispatch">GRO_dispatch_in, GRO_dispatch_out, GRO_time_indices</Group>
+    <Group name="GRO_dispatch_in">GRO_dispatch_in_scalar, GRO_dispatch_in_Time</Group>
+    <Group name="GRO_dispatch_out"/>
+    <Group name="GRO_dispatch_in_scalar" >GRO_capacities, scaling</Group>
+    <Group name="GRO_dispatch_in_Time"/>
     <Group name="GRO_full_dispatch"/>
     <Group name="GRO_full_dispatch_indices">GRO_time_indices</Group>
-    <Group name='GRO_armasamples'>GRO_armasamples_in, GRO_armasamples_out</Group>
-    <Group name='GRO_armasamples_in'>GRO_armasamples_in_scalar</Group>
-    <Group name='GRO_armasamples_out'>GRO_armasamples_out_scalar</Group>
-    <Group name='GRO_armasamples_in_scalar'>scaling, GRO_capacities</Group>
-    <Group name='GRO_armasamples_out_scalar'/>
+    <Group name="GRO_armasamples">GRO_armasamples_in, GRO_armasamples_out</Group>
+    <Group name="GRO_armasamples_in">GRO_armasamples_in_scalar</Group>
+    <Group name="GRO_armasamples_out">GRO_armasamples_out_scalar</Group>
+    <Group name="GRO_armasamples_in_scalar">scaling, GRO_capacities</Group>
+    <Group name="GRO_armasamples_out_scalar"/>
     <Group name="GRO_time_indices"/>
     <Group name="GRO_cashflows"/>
   </VariableGroups>
@@ -76,7 +76,7 @@
   </Databases>
 
   <Models>
-    <ExternalModel name='dispatch' subType='HERON.DispatchManager'>
+    <ExternalModel name="dispatch" subType="HERON.DispatchManager">
       <variables>GRO_dispatch, GRO_armasamples, GRO_full_dispatch, GRO_full_dispatch_indices, GRO_cashflows, cfYears</variables>
     </ExternalModel>
   </Models>

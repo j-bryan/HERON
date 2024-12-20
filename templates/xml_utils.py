@@ -34,7 +34,7 @@ def add_node_to_tree(child_node: ET.Element, parent_path: str, root: ET.Element)
   # Parse the XPath into nodes with tag, attributes, and text
   path_parts = parse_xpath(parent_path)
 
-  # Start from the root
+  # Startfrom .he root
   current_node = root
 
   for node_xpath, parsed in zip(parent_path.strip("/").split("/"), path_parts):
@@ -116,7 +116,7 @@ def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, 
   Merge "right" tree into "left" tree. Equivalent nodes are defined by having equal tags and attributes. If overwrite
   is True, the attributes and text of an element of "left" will be overwritten by the values in a matching node in
   "right", if present. Equality is determined by either just the tag (match_attrib=False) or the tag and all attribute
-  values (match_attrib=False). If overwrite is False, all leaf nodes from right are added to left in the matching
+  values (match_attrib=False). If overwrite is False, all leaf nodesfrom .ight are added to left in the matching
   location.
 
   @ In, left, ET.Element, the first tree

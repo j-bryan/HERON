@@ -478,6 +478,7 @@ class CSV(Placeholder):
     self.eval_mode = "full"
     self.needs_multiyear = 1
     self.limit_interp = 1
+    self._num_samples = 1
 
   def read_input(self, xml):
     """

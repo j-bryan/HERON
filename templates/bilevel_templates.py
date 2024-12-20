@@ -1,34 +1,39 @@
-import sys
-import os
+from pathlib import Path
 import shutil
-import xml.etree.ElementTree as ET
 
+from .imports import RAVEN_LOC
 from .types import HeronCase, Component, Source
-from .naming_utils import get_capacity_vars, get_component_activity_vars
-from .xml_utils import find_node
+from .naming_utils import get_capacity_vars, get_component_activity_vars, get_opt_objective
 
 from .raven_template import RavenTemplate
-from .snippets.factory import factory as snippet_factory
 from .snippets.variablegroups import VariableGroup
 from .snippets.databases import NetCDF
-from .snippets.dataobjects import DataSet, PointSet
-from .snippets.models import RavenCode, EconomicRatioPostProcessor
-from .snippets.outstreams import PrintOutStream
-from .snippets.samplers import SampledVariable, Sampler
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-import HERON.src._utils as hutils
-sys.path.pop()
-# get raven location
-RAVEN_LOC = os.path.abspath(os.path.join(hutils.get_raven_loc(), "ravenframework"))
-
+from .snippets.dataobjects import PointSet
+from .snippets.distributions import Distribution
+from .snippets.models import RavenCode
+from .snippets.outstreams import PrintOutStream, OptPathPlot
+from .snippets.samplers import SampledVariable, Sampler, Grid, MonteCarlo, CustomSampler
+from .snippets.steps import MultiRun
 
 class BilevelTemplate(RavenTemplate):
   """ Coordinates information between inner and outer templates for bilevel workflows """
-  def __init__(self):
+  def __init__(self, case: HeronCase, sources: list[Source]):
     super().__init__()
-    self.inner = InnerTemplate()
-    self.outer = OuterTemplate()
+    has_static_history = any(s.is_type("CSV") for s in sources)
+    has_synthetic_history = any(s.is_type("ARMA") for s in sources)
+    if has_static_history and has_synthetic_history:
+      raise ValueError("Bilevel HERON workflows expect either a static history source (<CSV>) or a synthetic history "
+                       "source (<ARMA>) but not both! Check your input file.")
+
+    self.inner = InnerTemplateStaticHistory() if has_static_history else InnerTemplateSyntheticHistory()
+
+    mode = case.get_mode()
+    if mode == "sweep":
+      self.outer = OuterTemplateSweep()
+    elif mode == "opt":
+      self.outer = OuterTemplateOpt()
+    else:
+      raise ValueError(f"Unsupported case mode '{mode}' in Bilevel workflow template.")
 
   def loadTemplate(self) -> None:
     self.inner.loadTemplate()
@@ -37,6 +42,10 @@ class BilevelTemplate(RavenTemplate):
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     self.inner.createWorkflow(case, components, sources)
     self.outer.createWorkflow(case, components, sources)
+
+    # Does the outer RAVEN model block need to pass along the "denoises" parameter? Only if using synthetic histories.
+    if isinstance(self.inner, InnerTemplateSyntheticHistory):
+      self.outer._template.find("Models/Code[@subType='RAVEN']").add_alias("denoises")
 
     # Coordinate across templates. The outer workflow needs to know where the inner workflow will save the dispatch
     # results to perform additional processing.
@@ -48,52 +57,24 @@ class BilevelTemplate(RavenTemplate):
     self.inner.writeWorkflow(destination, case, components, sources)
 
     # copy "write_inner.py", which has the denoising and capacity fixing algorithms
-    write_inner_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-    conv_src = os.path.abspath(os.path.join(write_inner_dir, 'write_inner.py'))
-    conv_file = os.path.abspath(os.path.join(destination, 'write_inner.py'))
-    shutil.copyfile(conv_src, conv_file)
-    msg_format = 'Wrote "{1}" to "{0}/"'
-    print(msg_format.format(*os.path.split(conv_file)))
+    conv_filename = "write_inner.py"
+    write_inner_dir = Path(__file__).parent
+    dest_dir = Path(destination)
+
+    conv_src = write_inner_dir / conv_filename
+    conv_file = dest_dir / conv_filename
+    shutil.copyfile(str(conv_src), str(conv_file))
+    print(f"Wrote '{conv_filename}' to '{str(dest_dir)}'")
 
 class OuterTemplate(RavenTemplate):
-  template_path = "outer.xml"
-  write_name = "outer.xml"
+  write_name = Path("outer.xml")
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     super().createWorkflow(case, components, sources)
-
-    # Add Function sources as Files
-    self._get_function_files(sources)
-
-    # Create slave RAVEN model. This gets loaded from the template, since all bilevel workflows use this.
-    raven = self._raven_model(case, components)
-
-    # Get any inputs to the sweep/opt MultiRun step. In this case, we need to look for a few files.
-    inputs = self._template.findall("Files/Input")
-
-    # Set up some helpful variable groups
-    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
-    capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"]))
-    capacities_vargroup.variables.extend(capacities_vars)
-
-    results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
-    results_vars = self._get_statistical_results_vars(case, components)
-    results_vargroup.variables.extend(results_vars)
-
-    # Define the sweep or optimize MultiRun steps and its necessary optimizers, samplers, data objects, etc.
-    if case.get_mode() == "sweep":
-      self._sweep_case(inputs, raven, case, components, sources)
-    elif case.get_mode() == "opt":
-      self._opt_case(inputs, raven, case, components, sources)
-    else:
-      # Shouldn't ever reach here, but I wanted to be explicit in which case modes are handled instead of using an
-      # else block in the case mode check control flow above.
-      raise ValueError(f"Case mode '{case.get_mode()}' is not supported for OuterTemplate templates.")
-
-    # Update the parallel settings based on the number of sampled variables if the number of outer parallel runs
-    # was not specified before.
-    if case.outerParallel == 0 and case.useParallel:
-      self._update_batch_size(case)
+    # Configure the RAVEN model
+    self._configure_raven_model(case, components)
+    # Populate the capacities and outer_results variable groups
+    self._configure_variable_groups(case, components)
 
   def set_inner_data_name(self, name: str, inner_to_outer: str) -> None:
     model = self._template.find("Models/Code[@subType='RAVEN']")
@@ -123,17 +104,17 @@ class OuterTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
 
-  def _raven_model(self, case: HeronCase, components: list[Component]) -> RavenCode:
+  def _configure_raven_model(self, case: HeronCase, components: list[Component]) -> RavenCode:
     """
     Configures the inner RAVEN code. The bilevel outer template MUST have a <Code subType="RAVEN"> node defined.
     """
     raven = self._template.find("Models/Code[@subType='RAVEN']")
 
     # Find the RAVEN executable to use
-    exec_path = os.path.abspath(os.path.join(RAVEN_LOC, "..", "raven_framework"))
-    if os.path.exists(exec_path):
-      executable = exec_path
-    elif shutil.which("raven_ravemework" is not None):
+    exec_path = RAVEN_LOC / "raven_framework"
+    if exec_path.resolve().exists():
+      executable = str(exec_path.resolve())
+    elif shutil.which("raven_framework") is not None:
       executable = "raven_framework"
     else:
       raise RuntimeError(f"raven_framework not in PATH and not at {exec_path}")
@@ -153,25 +134,107 @@ class OuterTemplate(RavenTemplate):
 
     return raven
 
-  def _update_batch_size(self, case: HeronCase) -> None:
-    if case.get_mode() == "sweep":
-      sampler = self._template.find("Samplers/Grid")
-    elif case.get_opt_strategy() == "BayesianOpt":
-      sampler = self._template.find("Optimizers/BayesianOptimizer")
-    elif case.get_opt_strategy() == "GradientDescent":
-      sampler = self._template.find("Optimizers/GradientDescent")
-    else:
-      raise ValueError("Sampler not found")
+  def _configure_variable_groups(self, case: HeronCase, components: list[Component]):
+    # Set up some helpful variable groups
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
+    capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"]))
+    capacities_vargroup.variables.extend(capacities_vars)
 
+    results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
+    results_vars = self._get_statistical_results_vars(case, components)
+    results_vargroup.variables.extend(results_vars)
+
+  def _set_batch_size(self, batch_size: int, case: HeronCase) -> None:
+    case.outerParallel = batch_size
     run_info = self._template.find("RunInfo")
-    case.outerParallel = sampler.num_sampled_vars + 1
-    run_info.batch_size = case.outerParallel
+    run_info.batch_size = batch_size
     run_info.internal_parallel = True
+
+
+class OuterTemplateOpt(OuterTemplate):
+  template_path = Path("xml/outer_opt.xml")
+
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    super().createWorkflow(case, components, sources)
+
+    # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
+    opt_strategy = case.get_opt_strategy()
+    if opt_strategy == "BayesianOpt":
+      optimizer = self._create_bayesian_opt(case, components)
+    elif opt_strategy == "GradientDescent":
+      optimizer = self._create_gradient_descent(case, components)
+    else:
+      raise ValueError(f"Template does not recognize optimization strategy {opt_strategy}.")
+
+    # Set optimizer <TargetEvaluation> data object
+    results_data = self._template.find("DataObjects/PointSet[@name='opt_eval']")
+    optimizer.target_evaluation = results_data
+
+    # Set optimizer objective function
+    objective = get_opt_objective(case)
+    optimizer.objective = objective
+    results = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")  # type: VariableGroup
+    if objective not in results.variables:
+      results.variables.insert(0, objective)
+
+    # Add case labels to the optimizer
+    self._add_labels_to_sampler(optimizer, case.get_labels())
+
+    # Add the optimizer and any custom function files to the main MultiRun step
+    multirun = self._template.find("Steps/MultiRun[@name='optimize']")  # type: MultiRun
+    for func in self._get_function_files(sources):
+      multirun.add_input(func)
+    multirun.add_optimizer(optimizer)
+
+    # Add the optimization objective to the opt_path plot variables
+    opt_path_plot = self._template.find("OutStreams/Plot[@subType='OptPath']")  # type: OptPathPlot
+    opt_path_plot.variables.append(objective)
+
+    # Update the parallel settings based on the number of sampled variables if the number of outer parallel runs
+    # was not specified before.
+    if case.outerParallel == 0 and case.useParallel:
+      batch_size = optimizer.num_sampled_vars + 1
+      self._set_batch_size(batch_size, case)
+
+
+class OuterTemplateSweep(OuterTemplate):
+  template_path = Path("xml/outer_sweep.xml")
+
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    super().createWorkflow(case, components, sources)
+
+    # Populate the sampled and constant capacities in the Grid sampler
+    sampler = self._template.find("Samplers/Grid")  # type: Grid
+    vars, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in vars.items():
+      sampler.add_variable(sampled_var)
+      sampled_var.use_grid(construction="custom", type="value", values=sorted(vals))
+    for var_name, val in consts.items():
+      sampler.add_constant(var_name, val)
+
+    # Number of "denoises" for the sampler is the number of samples it should take
+    sampler.denoises = case.get_num_samples()
+
+    # If there are any case labels, make a variable group for those and add it to the "grid" PointSet.
+    # These labels also need to get added to the sampler as constants.
+    grid_results = self._template.find("DataObjects/PointSet[@name='grid']")  # type: PointSet
+    labels = case.get_labels()
+    if labels:
+      vargroup = self._create_case_labels_vargroup(labels)
+      self._add_snippet(vargroup)
+      grid_results.outputs.append(vargroup.name)
+    self._add_labels_to_sampler(sampler, labels)
+
+    # Update the parallel settings based on the number of sampled variables if the number of outer parallel runs
+    # was not specified before.
+    if case.outerParallel == 0 and case.useParallel:
+      batch_size = sampler.num_sampled_vars + 1
+      self._set_batch_size(batch_size, case)
+
 
 class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
-  template_path = "inner.xml"
-  write_name = "inner.xml"
+  write_name = Path("inner.xml")
 
   def __init__(self):
     super().__init__()
@@ -181,86 +244,26 @@ class InnerTemplate(RavenTemplate):
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) ->  None:
     super().createWorkflow(case, components, sources)
 
-    # Add ARMA ROMs to ensemble model
-    #   - create pickled ROM for ARMA ROM
-    #     - model node
-    #   - load & print steps for pickled ROM
-    #     - iostep to load from file into rom node
-    #     - dataobject to hold rom meta, outstream to print it, and an iostep to make it happen
-    #   - add ROM to ensemble model
-    #     - input (Source) & output data objects for sampling
-    #     - add ROM as assembler node to ensemble model
-    ensemble_model = self._template.find("Models/EnsembleModel")
-    self._add_time_series_roms(ensemble_model, case, sources)
-
-    # Determine which variables are sampled by the Monte Carlo sampler
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
-    # default sampler init
-    mc.init_seed = 42
-    mc.init_limit = 3
-    #   - component capacities (constants)
-    #     - add variables to GRO_capacities
-    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
-    capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
-    capacities_vargroup.variables.extend(list(capacities_vars))
-    for k, v in capacities_vars.items():
-      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacity from outer in write_inner.py
-      mc.add_constant(k, val)
-
-    # Add case labels to sampler and variable groups, if any labels have been provided
-    #   - case labels (constants)
-    #     - make case_labels variable group
-    #     - case labels group to input variable groups (armasamples_in_scalar, dispatch_in_scalar)
-    #     - add constants to MC sampler
-    self._add_case_labels_to_sampler(case.get_labels())
-
-    # Add dispatch variables to GRO_init_disp, GRO_full_dispatch
+    # Add dispatch variables to GRO_full_dispatch
     dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
-    self._template.find("VariableGroups/Group[@name='GRO_init_disp']").variables.extend(dispatch_vars)
     self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
 
-    # Set time variable names
-    #   - add time index names in all DataSet objects (replacing "Time", "Year" default names)
-    #   - add time variable names to GRO_time_indices
+    # Set the index variable names for the time index names
     self._set_time_vars(case.get_time_name(), case.get_year_name())
 
-    # See if there are any uncertain cashflow parameters that need to get added to the sampler
-    # self._add_uncertain_cashflow_params(components)
-    sampled_vars, distributions = self._get_uncertain_cashflow_params(components)
-    if len(sampled_vars) > 0:
-      # Create a VariableGroup for the uncertain econ parameters
-      vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
-      if vg_econ_uq is None:
-        vg_econ_uq = VariableGroup("GRO_UQ")
-        self._add_snippet(vg_econ_uq)
-      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
-      self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
-      # Add the SampledVariable and Distribution nodes to the appropriate locations
-      for samp_var, dist in zip(sampled_vars, distributions):
-        self._add_snippet(dist)
-        vg_econ_uq.variables.append(samp_var.name)
-        mc.add_variable(samp_var)
-
     # Figure out econ metrics are being used for the case
-    #   - econ metrics (from case obj), total activity variables (assembled from components list)
-    #   - add to output groups GRO_dispatch_out, GRO_armasamples_out_scalar
+    #   - econ metrics (from case obj), total activity variables (assembledfrom .omponents list)
+    #   - add to output groups GRO_dispatch_out, GRO_timeseries_out_scalar
     #   - add to metrics data object (arma_metrics PointSet)
     activity_vars = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
     econ_vars = case.get_econ_metrics(nametype="output")
     output_vars = econ_vars + activity_vars
     self._template.find("VariableGroups/Group[@name='GRO_dispatch_out']").variables.extend(output_vars)
-    self._template.find("VariableGroups/Group[@name='GRO_armasamples_out_scalar']").variables.extend(output_vars)
+    self._template.find("VariableGroups/Group[@name='GRO_timeseries_out_scalar']").variables.extend(output_vars)
     self._template.find("DataObjects/PointSet[@name='arma_metrics']").outputs.extend(output_vars)
 
     # Figure out what result statistics are being used
-    #   - outer product of ({econ metrics (NPV, IRR, etc.)} U {activity variables "TotalActivity_*"}) x {statistics to use (mean, std, etc.)}
-    #     - NOTE: this part looks about identical to what was done in the outer
-    #     - Add these variables to GRO_final_return
-    #     - Make sure the objective function metric is in this group
-    #   - fill out econ post processor model
-    #     - format: <statName prefix="{abbrev}">variable name</statName>; can have additional "percent" or "threshold" attrib
-    #     - skip financial metrics (valueAtRisk, expectedShortfall, etc) for any TotalActivity* variable
-    vg_final_return = self._template.find("VariableGroups/Group[@name='GRO_final_return']")
+    vg_final_return = self._template.find("VariableGroups/Group[@name='GRO_metrics_stats']")
     results_vars = self._get_statistical_results_vars(case, components)
     vg_final_return.variables.extend(results_vars)
 
@@ -270,7 +273,10 @@ class InnerTemplate(RavenTemplate):
       econ_pp.append(stat.to_element(variable))
 
     # Work out how the inner results should be routed back to the outer
-    #    - database or csv
+    self._handle_data_inner_to_outer(case)
+
+  def _handle_data_inner_to_outer(self, case: HeronCase):
+    # Work out how the inner results should be routed back to the outer
     metrics_stats = self._template.find("DataObjects/PointSet[@name='metrics_stats']")
     write_metrics_stats = self._template.find(f"Steps/IOStep[@name='database']")
     self._dispatch_results_name = "disp_results"
@@ -306,24 +312,24 @@ class InnerTemplate(RavenTemplate):
     else:
       run_info.batch_size = 1
 
-  def _add_case_labels_to_sampler(self, case_labels: dict[str, str]) -> None:
+  def _add_case_labels_to_sampler(self, case_labels: dict[str, str], sampler: Sampler) -> None:
     """
     Adds case labels to relevant variable groups
     @ In, case_labels, dict[str, str], the case labels
+    @ In, sampler, Sampler, the sampler to add labels to
     @ Out, None
     """
     if not case_labels:
       return
 
-    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
     vg_case_labels = VariableGroup("GRO_case_labels")
     self._add_snippet(vg_case_labels)
-    self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_case_labels.name)
+    self._template.find("VariableGroups/Group[@name='GRO_timeseries_in_scalar']").variables.append(vg_case_labels.name)
     self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_case_labels.name)
     for k, label_val in case_labels.items():
       label_name = self.namingTemplates["variable"].format(unit=k, feature="label")
       vg_case_labels.variables.append(label_name)
-      mc.add_constant(label_name, label_val)
+      sampler.add_constant(label_name, label_val)
 
   def _set_time_vars(self, time_name: str, year_name: str) -> None:
     """
@@ -342,42 +348,115 @@ class InnerTemplate(RavenTemplate):
     for year_index in self._template.findall("DataObjects/DataSet/Index[@var='Year']"):
       year_index.set("var", year_name)
 
-  def _add_uncertain_cashflow_params(self, components) -> None:
-    # vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
-    # if vg_econ_uq is None:
-    #   vg_econ_uq = VariableGroup("GRO_UQ")
-    # mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")
+  def _add_uncertain_econ_params(self,
+                                 sampler: Sampler,
+                                 variables: list[SampledVariable],
+                                 distributions: list[Distribution]) -> VariableGroup:
+    vg_econ_uq = self._template.find("VariableGroups/Group[@name='GRO_UQ']")
+    if vg_econ_uq is None:
+      vg_econ_uq = VariableGroup("GRO_UQ")
+      self._add_snippet(vg_econ_uq)
+    # Add the SampledVariable and Distribution nodes to the appropriate locations
+    for samp_var, dist in zip(variables, distributions):
+      self._add_snippet(dist)
+      vg_econ_uq.variables.append(samp_var.name)
+      sampler.add_variable(samp_var)
+    return vg_econ_uq
 
-    sampled_vars = []
-    distributions = []
+  def _add_constant_caps_to_sampler(self, sampler: Sampler, components: list[Component]):
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")  # type: VariableGroup
+    capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
+    capacities_vargroup.variables.extend(list(capacities_vars))
+    for k, v in capacities_vars.items():
+      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacityfrom .uter in write_inner.py
+      sampler.add_constant(k, val)
 
-    # Add all uncertain cashflow parameters from all cashflows from all components to sampler
-    for component in components:
-      for cashflow in component.get_cashflows():
-        for param_name, vp in cashflow.get_uncertain_params().items():
-          unit_name = f"{component.name}_{cashflow.name}"
-          feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=param_name)
-          dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
 
-          # Reconstruct distribution XML node from ValuedParam definition
-          dist_node = vp._vp.get_distribution()  # type: ET.Element
-          dist_node.set("name", dist_name)
-          dist_snippet = snippet_factory.from_xml(dist_node)
-          distributions.append(dist_snippet)
+class InnerTemplateSyntheticHistory(InnerTemplate):
+  """ Template for the inner workflow of a bilevel problem that uses a static history source """
+  template_path = Path("xml/inner_synth.xml")
 
-          # Add uncertain parameter to econ UQ variable group
-          # vg_econ_uq.variables.append(feat_name)
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) ->  None:
+    super().createWorkflow(case, components, sources)
 
-          # Add distribution to MonteCarlo sampler
-          sampler_var = SampledVariable(feat_name)
-          sampler_var.distribution = dist_snippet
-          # mc.add_variable(sampler_var)
-          sampled_vars.append(sampler_var)
+    # Add ARMA ROMs to ensemble model
+    ensemble_model = self._template.find("Models/EnsembleModel")
+    self._add_time_series_roms(ensemble_model, case, sources)
 
-    # Update variable groups with the GRO_UQ group to include the uncertain cashflow parameters in the model inputs
-    # if vg_econ_uq.variables:
-    #   self._add_snippet(vg_econ_uq)
-    #   self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
-    #   self._template.find("VariableGroups/Group[@name='GRO_armasamples_in_scalar']").variables.append(vg_econ_uq.name)
+    # Determine which variables are sampled by the Monte Carlo sampler
+    mc = self._template.find("Samplers/MonteCarlo[@name='mc_arma_dispatch']")  # type: MonteCarlo
+    # default sampler init
+    mc.init_seed = 42
+    mc.init_limit = 3
+    # Add capacities as constants to the sampler
+    self._add_constant_caps_to_sampler(mc, components)
 
-    return sampled_vars, distributions
+    # Add case labels to sampler and variable groups, if any labels have been provided
+    self._add_case_labels_to_sampler(case.get_labels(), mc)
+
+    # See if there are any uncertain cashflow parameters that need to get added to the sampler
+    sampled_vars, distributions = self._get_uncertain_cashflow_params(components)
+    if len(sampled_vars) > 0:
+      # Create a VariableGroup for the uncertain econ parameters
+      vg_econ_uq = self._add_uncertain_econ_params(mc, sampled_vars, distributions)
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
+      self._template.find("VariableGroups/Group[@name='GRO_timeseries_in_scalar']").variables.append(vg_econ_uq.name)
+
+
+class InnerTemplateStaticHistory(InnerTemplate):
+  """ Template for the inner workflow of a bilevel problem """
+  template_path = Path("xml/inner_static.xml")
+
+  # With static histories, the stats that are used shouldn't require multiple samples. Therefore, we drop the
+  # sigma and variance default stat names for the static history case here.
+  DEFAULT_STATS_NAMES = {
+    "opt": ["expectedValue", "median"],
+    "sweep": ["maximum", "minimum", "percentile", "samples"]
+  }
+
+  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) ->  None:
+    super().createWorkflow(case, components, sources)
+
+    # Create the custom sampler used to provide static history data to the model
+    custom_sampler = CustomSampler("static_history_sampler")
+    self._configure_static_history_sampler(custom_sampler, case, sources)
+
+    # Add case labels to the sampler
+    self._add_case_labels_to_sampler(case.get_labels(), custom_sampler)
+
+    # Add the outer capacities as constants here
+    #   - component capacities (constants)
+    #     - add variables to GRO_capacities
+    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")  # type: VariableGroup
+    capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
+    capacities_vargroup.variables.extend(list(capacities_vars))
+    for k, v in capacities_vars.items():
+      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacityfrom .uter in write_inner.py
+      custom_sampler.add_constant(k, val)
+
+    # See if there are any uncertain cashflow parameters. If so, we need to create a MonteCarlo sampler to sample
+    #from .hose distributions and tie the MonteCarlo and CustomSampler samplers together with an EnsembleForward
+    # sampler.
+    sampled_vars, distributions = self._get_uncertain_cashflow_params(components)
+    if len(sampled_vars) > 0:
+      # Create a MonteCarlo sampler
+      mc = MonteCarlo("mc")
+      mc.init_seed = 42
+      mc.init_limit = case.get_num_samples()
+      # Create a VariableGroup for the uncertain econ parameters
+      vg_econ_uq = self._add_uncertain_econ_params(mc, sampled_vars, distributions)
+      self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_scalar']").variables.append(vg_econ_uq.name)
+      self._template.find("VariableGroups/Group[@name='GRO_timeseries_in_scalar']").variables.append(vg_econ_uq.name)
+
+      # Combine the MonteCarlo and CustomSampler samplers in an EnsembleForward sampler.
+      ensemble_sampler = self._create_ensemble_forward_sampler(custom_sampler, mc)
+      self._add_snippet(ensemble_sampler)
+
+      sampler = ensemble_sampler
+    else:
+      self._add_snippet(custom_sampler)
+      sampler = custom_sampler
+
+    # Set the sampler to be used in the main MultiRun
+    multirun = self._template.find("Steps/MultiRun[@name='arma_sampling']")
+    multirun.add_sampler(sampler)

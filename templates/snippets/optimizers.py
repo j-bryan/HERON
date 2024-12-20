@@ -10,7 +10,7 @@ from .samplers import Sampler
 from .dataobjects import DataObject
 
 
-class Optimizer(Sampler):  # inheriting from Sampler mimics RAVEN inheritance structure
+class Optimizer(Sampler):  # inheritingfrom .ampler mimics RAVEN inheritance structure
   """ A base class for RAVEN optimizer XML snippets """
   snippet_class = "Optimizers"
 

@@ -31,7 +31,7 @@ def load_pickled_rom(source: Source) -> tuple[File, PickledROM, IOStep]:
   if source.eval_mode == 'clustered':
     ET.SubElement(rom, "clusterEvalMode").text = "clustered"
 
-  # Create an IOStep to load the ROM from the file
+  # Create an IOStep to load the ROMfrom .he file
   step = IOStep(f"read_{source.name}")
   step.append(file.to_assembler_node("Input"))
   step.append(rom.to_assembler_node("Output"))

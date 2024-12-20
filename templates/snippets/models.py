@@ -17,9 +17,10 @@ class RavenCode(RavenSnippet):
     super().__init__(name)
     self._py_cmd = None
 
-  def add_alias(self, name: str, suffix: str) -> None:
-    alias_text = f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{name}_{suffix}"  # TODO allow other samplers?
-    alias = ET.SubElement(self, "alias", {"variable": f"{name}_{suffix}", "type": "input"})
+  def add_alias(self, name: str, suffix: str | None = None) -> None:
+    varname = name if not suffix else f"{name}_{suffix}"
+    alias_text = f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{varname}"  # TODO allow other samplers?
+    alias = ET.SubElement(self, "alias", {"variable": varname, "type": "input"})
     alias.text = alias_text
 
   def set_inner_data_handling(self, dest: str, dest_type: str) -> None:
@@ -88,7 +89,7 @@ class GaussianProcessRegressor(RavenSnippet):
   @listproperty
   def features(self) -> list[str]:
     node = self.find("Features")
-    return getattr(node, "text", []) or []
+    return getattr(node, "text", [])
 
   @features.setter
   def features(self, value: list[str]) -> None:
