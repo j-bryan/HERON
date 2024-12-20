@@ -1,8 +1,9 @@
+from typing import Any
 from pathlib import Path
 import shutil
 
 from .imports import RAVEN_LOC
-from .types import HeronCase, Component, Source
+from .heron_types import HeronCase, Component, Source
 from .naming_utils import get_capacity_vars, get_component_activity_vars, get_opt_objective
 
 from .raven_template import RavenTemplate
@@ -41,11 +42,10 @@ class BilevelTemplate(RavenTemplate):
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     self.inner.createWorkflow(case, components, sources)
-    self.outer.createWorkflow(case, components, sources)
 
-    # Does the outer RAVEN model block need to pass along the "denoises" parameter? Only if using synthetic histories.
-    if isinstance(self.inner, InnerTemplateSyntheticHistory):
-      self.outer._template.find("Models/Code[@subType='RAVEN']").add_alias("denoises")
+    # set the path to the inner sampler so the outer knows where to send aliased variables
+    self.outer.inner_sampler = self.inner.get_sampler_path()
+    self.outer.createWorkflow(case, components, sources)
 
     # Coordinate across templates. The outer workflow needs to know where the inner workflow will save the dispatch
     # results to perform additional processing.
@@ -68,6 +68,10 @@ class BilevelTemplate(RavenTemplate):
 
 class OuterTemplate(RavenTemplate):
   write_name = Path("outer.xml")
+
+  def __init__(self):
+    super().__init__()
+    self.inner_sampler = None
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     super().createWorkflow(case, components, sources)
@@ -108,7 +112,7 @@ class OuterTemplate(RavenTemplate):
     """
     Configures the inner RAVEN code. The bilevel outer template MUST have a <Code subType="RAVEN"> node defined.
     """
-    raven = self._template.find("Models/Code[@subType='RAVEN']")
+    raven = self._template.find("Models/Code[@subType='RAVEN']")  # type: RavenCode
 
     # Find the RAVEN executable to use
     exec_path = RAVEN_LOC / "raven_framework"
@@ -124,13 +128,16 @@ class OuterTemplate(RavenTemplate):
     if cmd := case.get_py_cmd_for_raven():
       raven.python_command = cmd
 
+    # Add alias for the number of denoises
+    raven.add_alias("denoises", loc=self.inner_sampler)
+
     # Add variable aliases for Inner
     for component in components:
-      raven.add_alias(component.name, suffix="capacity")
+      raven.add_alias(component.name, suffix="capacity", loc=self.inner_sampler)
 
     # Add label aliases for Inner
     for label in case.get_labels():
-      raven.add_alias(label, suffix="label")
+      raven.add_alias(label, suffix="label", loc=self.inner_sampler)
 
     return raven
 
@@ -196,6 +203,14 @@ class OuterTemplateOpt(OuterTemplate):
       batch_size = optimizer.num_sampled_vars + 1
       self._set_batch_size(batch_size, case)
 
+  def set_denoises_alias(self, denoises: int) -> None:
+    """
+    Set the number of denoises in the sampler
+    @ In, denoises, int, the number of denoises
+    @ Out, None
+    """
+    raise NotImplementedError
+
 
 class OuterTemplateSweep(OuterTemplate):
   template_path = Path("xml/outer_sweep.xml")
@@ -231,6 +246,14 @@ class OuterTemplateSweep(OuterTemplate):
       batch_size = sampler.num_sampled_vars + 1
       self._set_batch_size(batch_size, case)
 
+  def set_denoises_alias(self, denoises: int) -> None:
+    """
+    Set the number of denoises in the sampler
+    @ In, denoises, int, the number of denoises
+    @ Out, None
+    """
+    raise NotImplementedError
+
 
 class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
@@ -245,8 +268,8 @@ class InnerTemplate(RavenTemplate):
     super().createWorkflow(case, components, sources)
 
     # Add dispatch variables to GRO_full_dispatch
-    dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
-    self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
+    # dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
+    # self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
 
     # Set the index variable names for the time index names
     self._set_time_vars(case.get_time_name(), case.get_year_name())
@@ -274,6 +297,16 @@ class InnerTemplate(RavenTemplate):
 
     # Work out how the inner results should be routed back to the outer
     self._handle_data_inner_to_outer(case)
+
+  def get_sampler_path(self) -> str:
+    """
+    Getter for the pipe-delimited path to the first sampler in the workflow
+    @ In, None
+    @ Out, path, str, the path to the sampler
+    """
+    sampler = self._template.find("Samplers")[0]
+    path = f"Samplers|{sampler.tag}@name:{sampler.name}"
+    return path
 
   def _handle_data_inner_to_outer(self, case: HeronCase):
     # Work out how the inner results should be routed back to the outer
@@ -338,9 +371,8 @@ class InnerTemplate(RavenTemplate):
     @ In, year_name, str, name of year variable
     @ Out, None
     """
-    for vg in ["GRO_dispatch", "GRO_full_dispatch_indices"]:
-      group = self._template.find(f"VariableGroups/Group[@name='{vg}']")
-      group.variables.extend([time_name, year_name])
+    group = self._template.find(f"VariableGroups/Group[@name='GRO_dispatch']")
+    group.variables.extend([time_name, year_name])
 
     for time_index in self._template.findall("DataObjects/DataSet/Index[@var='Time']"):
       time_index.set("var", time_name)
@@ -406,13 +438,6 @@ class InnerTemplateSyntheticHistory(InnerTemplate):
 class InnerTemplateStaticHistory(InnerTemplate):
   """ Template for the inner workflow of a bilevel problem """
   template_path = Path("xml/inner_static.xml")
-
-  # With static histories, the stats that are used shouldn't require multiple samples. Therefore, we drop the
-  # sigma and variance default stat names for the static history case here.
-  DEFAULT_STATS_NAMES = {
-    "opt": ["expectedValue", "median"],
-    "sweep": ["maximum", "minimum", "percentile", "samples"]
-  }
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) ->  None:
     super().createWorkflow(case, components, sources)

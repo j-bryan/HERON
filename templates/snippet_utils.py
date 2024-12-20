@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 
-from .types import HeronCase, Source
+from .heron_types import HeronCase, Source
 from .snippets.base import RavenSnippet
 from .snippets.dataobjects import DataSet
 from .snippets.files import File

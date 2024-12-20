@@ -10,7 +10,7 @@ from pathlib import Path
 import itertools as it
 import xml.etree.ElementTree as ET
 
-from .types import HeronCase, Component, Source, ValuedParam
+from .heron_types import HeronCase, Component, Source, ValuedParam
 from .naming_utils import get_result_stats, get_component_activity_vars, get_opt_objective, get_statistics, Statistic
 from .xml_utils import add_node_to_tree, stringify_node_values
 from .snippet_utils import load_pickled_rom, print_rom_meta

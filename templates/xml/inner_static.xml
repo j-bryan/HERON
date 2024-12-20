@@ -61,8 +61,7 @@
 
   <Models>
     <ExternalModel name="dispatch" subType="HERON.DispatchManager">
-      <inputs>GRO_capacities, GRO_timeseries</inputs>
-      <outputs>GRO_results</outputs>
+      <variables>GRO_dispatch, GRO_timeseries</variables>
     </ExternalModel>
 
     <PostProcessor name="statistics" subType="EconomicRatio"/>

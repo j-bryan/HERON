@@ -17,9 +17,11 @@ class RavenCode(RavenSnippet):
     super().__init__(name)
     self._py_cmd = None
 
-  def add_alias(self, name: str, suffix: str | None = None) -> None:
+  def add_alias(self, name: str, suffix: str | None = None, loc: str | None = None) -> None:
     varname = name if not suffix else f"{name}_{suffix}"
-    alias_text = f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{varname}"  # TODO allow other samplers?
+    if not loc:
+      loc = "Samplers|MonteCarlo@name:mc_arma_dispatch"
+    alias_text = f"{loc}|constant@name:{varname}"
     alias = ET.SubElement(self, "alias", {"variable": varname, "type": "input"})
     alias.text = alias_text
 

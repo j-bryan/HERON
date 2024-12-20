@@ -1,5 +1,5 @@
 from pathlib import Path
-from .types import HeronCase, Component, Source
+from .heron_types import HeronCase, Component, Source
 
 from .raven_template import RavenTemplate
 

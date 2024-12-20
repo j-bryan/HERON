@@ -1,28 +1,51 @@
+from typing import Any
 import xml.etree.ElementTree as ET
-import re
 
 def increment(item, d):
   item = item.strip().rsplit("_", 1)[0] + f"_{d}"
   return item
 
-def modifyInput(root: ET.Element, mod_dict: dict) -> ET.Element:
-  # Modify the MonteCarlo sampler (if present) to reflect the desired number of samples and to update the
-  # values of constant quantities.
-  mc = root.find("Samplers/MonteCarlo")
-  if mc is None:
-    # No MonteCarlo sampler node, so nothing to update
-    return root
+def alias_to_xpath(alias: str) -> str:
+    """
+    Convert RAVEN alias syntax to an XPath
+    @ In, alias, str, alias path
+    @ Out, xpath, str, the equivalent xpath
+    """
+    # Split the alias path by '|'
+    parts = alias.split("|")
 
+    # Initialize an empty list to hold the formatted parts
+    xpath_parts = []
+
+    # Iterate over each part
+    for part in parts:
+        # Check if the part contains an attribute
+        if '@' in part:
+            # Split the part into element and attribute
+            element, attribute = part.split("@")
+            # Split the attribute into name and value
+            attr_name, attr_value = attribute.split(":")
+            # Format and append the part to the list
+            xpath_parts.append(f"{element}[@{attr_name}='{attr_value}']")
+        else:
+            # If no attribute, just append the element
+            xpath_parts.append(part)
+
+    # Join all parts with '/' to form the final XPath
+    xpath = "/".join(xpath_parts)
+    return xpath
+
+def modifyInput(root: ET.Element, mod_dict: dict[str, Any]) -> ET.Element:
+  """
+  Modify the inner workflow XML
+  @ In, root, ET.Element, the XML of the inner workflow
+  @ In, mod_dict, dict[str, Any], modifications to make to the workflow
+  @ Out, root, ET.Element, the modified XML
+  """
   # Set sampler limit to the number of denoises
-  denoises = mod_dict["Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:denoises"]
-  mc.find('samplerInit/limit').text = str(denoises)
-
-  # Set the component capacities as constants in the sampler
-  pattern = r"(?<=@name:)\w+(?=_capacity)"  # regex pattern for "*@name:{comp_name}_capcity*"
   for k, v in mod_dict.items():
-    if match := re.search(pattern, k):
-      comp = match.group()
-      const = mc.find(f"constant[@name='{comp}_capacity']")
-      const.text = str(mod_dict[f"Samplers|MonteCarlo@name:mc_arma_dispatch|constant@name:{comp}_capacity"])
-
+    xpath = alias_to_xpath(k)
+    root.find(xpath).text = str(v)
+    if "denoises" in xpath and (limit_node := root.find('.//samplerInit/limit')) is not None:  # special handling for denoises
+      limit_node.text = str(v)
   return root

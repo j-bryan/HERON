@@ -8,7 +8,7 @@ from .snippets.runinfo import RunInfo
 from .snippets.samplers import MonteCarlo, CustomSampler
 from .snippets.variablegroups import VariableGroup
 
-from .types import HeronCase, Component, Source
+from .heron_types import HeronCase, Component, Source
 from .naming_utils import get_capacity_vars, get_component_activity_vars, get_cashflow_names
 from .xml_utils import find_node
 

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from .types import HeronCase, Component
+from .heron_types import HeronCase, Component
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ import dill as pk
 from pathlib import Path
 
 from .imports import Base
-from .types import HeronCase, Component, Source
+from .heron_types import HeronCase, Component, Source
 from .raven_template import RavenTemplate
 from .bilevel_templates import BilevelTemplate
 from .flat_templates import FlatMultiConfigTemplate
