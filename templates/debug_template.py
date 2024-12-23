@@ -19,6 +19,13 @@ class DebugTemplate(RavenTemplate):
   write_name = Path("outer.xml")
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    """
+    Create a workflow for the specified Case and its components and sources
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], components in HERON case
+    @ In, sources, list[Source], external models, data, and functions
+    @ Out, None
+    """
     super().createWorkflow(case, components, sources)
 
     # First, handle aspects of the workflow common across all debug runs
@@ -125,7 +132,13 @@ class DebugTemplate(RavenTemplate):
     for func in self._get_function_files(sources):
       multirun.add_input(func)
 
-  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase) -> None:
+    """
+    Initializes the RunInfo node of the workflow
+    @ In, case, Case, the HERON Case object
+    @ In, case_name, str, optional, the case name
+    @ Out, run_info, RunInfo, a RunInfo object describing case run info
+    """
     case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
     run_info = super()._initialize_runinfo(case, case_name)
 

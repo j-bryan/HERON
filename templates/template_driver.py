@@ -1,4 +1,3 @@
-
 # Copyright 2020, Battelle Energy Alliance, LLC
 # ALL RIGHTS RESERVED
 """
@@ -19,7 +18,12 @@ class TemplateDriver(Base):
   # Map HERON features (determined by parts of case, components, and sources objects) to their FeatureDrivers.
   # Decide which template(s) to load.
   # Set naming conventions used throughout the templates
-  def __init__(self):
+  def __init__(self) -> None:
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
     super().__init__()
     self.template = None  # type: RavenTemplate
 
@@ -34,24 +38,23 @@ class TemplateDriver(Base):
     @ In, sources, list[Source], external models, data, and functions
     @ Out, None
     """
+    has_static_history = any(s.is_type("CSV") for s in sources)
+    has_synthetic_history = any(s.is_type("ARMA") for s in sources)
+    mode = case.get_mode()
+
     if case.debug["enabled"]:
       # Debug mode runs a workflow with fixed capacities with lots of outputs to help determine if a simulation has
       # been correctly specified.
       self.template = DebugTemplate()
-    elif self._has_only_static_history(sources) \
+    elif has_static_history \
+         and not has_synthetic_history \
          and self._number_of_static_history_samples(case, sources) == 1 \
          and not self._has_uncertain_econ_params(components) \
-         and case.get_mode() == "sweep":
+         and mode == "sweep":
       # Fixed history workflow: only run the dispatch optimization once per capacity configuration.
       # This is quite a restrictive case due to some limitations in how sampling and post-processing is done in
       # RAVEN.
       self.template = FlatMultiConfigTemplate()
-    elif self._has_all_capacities_fixed(components):
-      # Fixed configuration workflow: analyze a fixed system configuration over many synthetic histories.
-      # This is like a generalization of debug mode. All types of uncertain economic parameters can be accommodated
-      # in this type of workflow.
-      self.template = BilevelTemplate(case, sources)  # FIXME: using bilevel template until this can be implemented
-      # TODO: FlatMultiDispatchTemplate
     else:
       # Use the bilevel problem formulation. Outer workflow samples component capacities and uncertain economic
       # parameters. Inner workflow performs dispatch optimization over multiple synthetic histories.
@@ -59,27 +62,36 @@ class TemplateDriver(Base):
       #   - Multiple histories and capacity configurations (PostProcessor won't calculate statistics for each capacity)
       #   - Any opt mode case (can't specify both a sampler and an optimizer in a MultiRun step)
       #   -
-      self.template = BilevelTemplate(case, sources)
+      self.template = BilevelTemplate(mode, has_static_history, has_synthetic_history)
+
+    # TODO: A case where all capacities are fixed could also be make to be a flat workflow. There is no demand for this
+    #       type of workflow right now (to my knowledge, as of 2024-12-20), so this hasn't yet been implemented.
 
     self.template.loadTemplate()
     self.template.createWorkflow(case, components, sources)
 
   def write_workflow(self, loc: str, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    """
+    Write the workflow to file
+    @ In, loc, str, directory to write to
+    @ In, case, HeronCase, the HERON case object
+    @ In, components, list[Component], case components
+    @ In, sources, list[Source], case sources
+    @ Out, None
+    """
     print('========================')
     print('HERON: writing files ...')
     print('========================')
-    self.template.writeWorkflow(loc, case, components, sources)
+    self.template.writeWorkflow(loc)
 
     # Write library of info so it can be read in dispatch during inner run. Doing this here ensures that the lib file
     # is written just once, no matter the number of workflow files written by the template.
     if isinstance(loc, str):
       loc = Path(loc)
-    data = (case, components, sources)
-    lib_name = self.template.namingTemplates["lib file"]
-    lib_file = loc / lib_name
+    lib_file = loc / self.template.namingTemplates["lib file"]
     with lib_file.open("wb") as lib:
-      pk.dump(data, lib)
-    print(f"Wrote '{lib_name}' to '{str(loc)}'")
+      pk.dump((case, components, sources), lib)
+    print(f"Wrote '{lib_file.name}' to '{str(loc.resolve())}'")
 
   ###################
   # Utility methods #
@@ -92,18 +104,6 @@ class TemplateDriver(Base):
     @ Out, has_all_capacities_fixed, bool, if all components have fixed capacities
     """
     return not any([comp.get_capacity(None, raw=True).is_parametric() for comp in components])
-
-  @staticmethod
-  def _has_only_static_history(sources: list[Source]) -> bool:
-    """
-    Checks if static history is being used and no synthetic history model is specified
-    @ In, sources, list[Source], list of source placeholders
-    @ Out, has_static_history, bool, if all components have fixed capacities
-    """
-    source_types = [source.type for source in sources]
-    has_static_history = "CSV" in source_types
-    has_synth_history = "ARMA" in source_types
-    return has_static_history and not has_synth_history
 
   @staticmethod
   def _has_uncertain_econ_params(components: list[Component]) -> bool:
@@ -132,3 +132,4 @@ class TemplateDriver(Base):
         filter(lambda x: x.type == "CSV", sources)
       ),
     )
+

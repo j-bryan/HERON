@@ -117,19 +117,10 @@ class RavenTemplate(Template):
     self._set_verbosity(case.get_verbosity())
     self._initialize_runinfo(case)
 
-  def writeWorkflow(self,
-                    destination: str,
-                    case: HeronCase,
-                    components: list[Component],
-                    sources: list[Source],
-                    run: bool = False) -> None:
+  def writeWorkflow(self, loc: str) -> None:
     """
     Write RAVEN workflow
-    @ In, destination, str, path to write workflows to
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
-    @ In, run, bool, if True then attempt to run the workflows
+    @ In, loc, str, path to write workflows to
     @ Out, None
     """
     # Ensure all node attribute values and text are expressed as strings. Errors are thrown if any of these aren't
@@ -144,24 +135,21 @@ class RavenTemplate(Template):
       if len(node) == 0:
         self._template.remove(node)
 
-    dest_dir = Path(destination)
+    dest_dir = Path(loc)
     xml_file = dest_dir / self.write_name
 
     xml_file.write_text(xmlUtils.prettify(self._template))
-    print(f"Wrote '{self.write_name}' to '{str(dest_dir)}'")
+    print(f"Wrote '{self.write_name}' to '{str(dest_dir.resolve())}'")
 
-    # run, if requested
-    if run:
-      self.runWorkflow(destination)
-
-  #############################################
-  # UTILITIES FOR ADDING SNIPPETS TO TEMPLATE #
-  #############################################
+  #####################
+  # SNIPPET UTILITIES #
+  #####################
   def _add_snippet(self, snippet: RavenSnippet, parent: str | ET.Element | None = None) -> None:
     """
     Add an XML snippet to the template XML
     @ In, snippet, RavenSnippet, the XML snippet to add
     @ In, parent, str | ET.Element | None, the parent node to add the snippet
+    @ Out, None
     """
     if isinstance(snippet, ET.Element) and not isinstance(snippet, RavenSnippet):
       raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
@@ -190,135 +178,6 @@ class RavenTemplate(Template):
     # Make the parent node if it doesn't exist. This is helpful if it's unknown if top-level nodes (Models, Optimizers,
     # Steps, etc.) exist without having to add a check everywhere a snippet needs to get added.
     add_node_to_tree(snippet, parent_path, self._template)
-
-  ####################
-  # MAJOR CASE MODES #
-  ####################
-  # These functions help to define and connect features of the RAVEN workflow for "sweep" and "opt" modes. These use
-  # a few abstract methods which should be implemented by subclasses to correctly handle each mode.
-
-  def _sweep_case(self, case: HeronCase, components: list[Component]) -> tuple[Grid, PointSet, PrintOutStream]:
-    """
-    Sets up everything necessary for running a sweep with "model" and outputting the results.
-    @ In, inputs, list[RavenSnippet], list of inputs to add as Input nodes in the optimization MultiRun step
-    @ In, model, Model, model to be optimized
-    @ In, case, Case, HERON case object
-    @ In, components, list[Component], HERON component objects
-    @ In, sources, list[Source], Source objects for data sources
-    """
-    # Fetch some helpful variable groups
-    capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
-    results_vargroup = self._template.find("VariableGroups/Group[@name='GRO_outer_results']")
-
-    # Define the grid sampler and its accompanying results PointSet
-    sampler, results_data = self._create_grid_sampler(case, components, capacities_vargroup, results_vargroup)
-
-    # Print the results of the sweep
-    print_results = PrintOutStream("sweep")
-    print_results.source = results_data
-    self._add_snippet(print_results)
-
-    return sampler, results_data, print_results
-
-  def _sweep_case(self,
-                  inputs: list[RavenSnippet],
-                  model: RavenSnippet,
-                  case: HeronCase,
-                  components: list[Component]) -> None:
-    sampler, results_data = self._create_sweep_sampler(case, components)
-    # Print the results of the sweep
-    print_results = PrintOutStream("sweep")
-    print_results.source = results_data
-    self._add_snippet(print_results)
-
-    # Use a MultiRun to run to the model over the grid points
-    multirun = MultiRun("sweep")
-    for inp in inputs:
-      multirun.add_input(inp)
-    multirun.add_model(model)
-    multirun.add_sampler(sampler)
-    multirun.add_output(results_data)
-    multirun.add_output(print_results)
-    self._add_snippet(multirun)
-
-  def _opt_case(self,
-                inputs: list[RavenSnippet],
-                model: RavenSnippet,
-                case: HeronCase,
-                components: list[Component],
-                sources: list[Source],
-                capacities: VariableGroup,
-                results: VariableGroup):
-    """
-    Sets up everything necessary for running an optimizer with "model" and outputting the results.
-    @ In, inputs, list[RavenSnippet], list of inputs to add as Input nodes in the optimization MultiRun step
-    @ In, model, Model, model to be optimized
-    @ In, case, Case, HERON case object
-    @ In, components, list[Component], HERON component objects
-    @ In, sources, list[Source], Source objects for data sources
-    """
-    # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
-    opt_strategy = case.get_opt_strategy()
-    if opt_strategy == "BayesianOpt":
-      optimizer = self._create_bayesian_opt(case, components)
-    elif opt_strategy == "GradientDescent":
-      optimizer = self._create_gradient_descent(case, components)
-    else:
-      raise ValueError(f"Template does not recognize optimization strategy {opt_strategy}.")
-
-    # Set optimizer <TargetEvaluation> data object
-    results_data = PointSet("opt_eval")
-    results_data.inputs.append(capacities)
-    results_data.outputs.append(results)
-    self._add_snippet(results_data)
-    optimizer.target_evaluation = results_data
-
-    # Set optimizer objective function
-    objective = get_opt_objective(case)
-    optimizer.objective = objective
-    if objective not in results.variables:
-      results.variables.insert(0, objective)
-
-    # Add case labels to the optimizer
-    self._add_labels_to_sampler(optimizer, case.get_labels())
-
-    # Create a data object for saving the optimization path
-    solution_export = PointSet("opt_soln")
-    solution_export.inputs.append("trajID")
-    solution_export.outputs.extend(["iteration", "accepted", capacities, results])
-    self._add_snippet(solution_export)
-
-    # Create a MultiRun step to run the optimization
-    multirun = MultiRun("optimize")
-    for inp in inputs:
-      multirun.add_input(inp)
-    multirun.add_model(model)
-    multirun.add_optimizer(optimizer)
-    multirun.add_solution_export(solution_export)
-    multirun.add_output(results_data)
-    self._add_snippet(multirun)
-
-    # Plot the result of the optimization
-    opt_path_plot = OptPathPlot("opt_path")
-    opt_path_plot.source = solution_export
-    opt_path_plot.variables = ["GRO_capacities", objective]
-    self._add_snippet(opt_path_plot)
-
-    # Print the results of the optimization
-    print_results = PrintOutStream("opt_soln")
-    print_results.source = solution_export
-    print_results.add_subelements(clusterLabel="trajID")
-    self._add_snippet(print_results)
-
-    plot_step = IOStep(f"plot")
-    plot_step.add_input(solution_export)
-    plot_step.add_output(opt_path_plot)
-    plot_step.add_output(print_results)
-    self._add_snippet(plot_step)
-
-    # Add steps to the Sequence in RunInfo
-    self._add_step_to_sequence(multirun)
-    self._add_step_to_sequence(plot_step)
 
   ##############################
   # FEATURE BUILDING UTILITIES #
