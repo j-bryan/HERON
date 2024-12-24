@@ -1,9 +1,15 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Base RavenSnippet class
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-11-08
+"""
 from typing import Any
-import itertools as it
 import xml.etree.ElementTree as ET
 
 from ..xml_utils import merge_trees
-from ..decorators import listproperty
 
 class RavenSnippet(ET.Element):
   """
@@ -35,11 +41,10 @@ class RavenSnippet(ET.Element):
 
     return snippet
 
-  def __init__(self,
-               name: str | None = None,
-               subelements: dict[str, Any] = {}) -> None:
+  def __init__(self, name: str | None = None, subelements: dict[str, Any] = {}) -> None:
     """
-    @ In, name, str, the name of the entity
+    Constructor
+    @ In, name, str, optional, the name of the entity
     @ In, subelements, dict[str, Any], optional, keyword settings which are added as XML child nodes
     @ Out, None
     """
@@ -59,6 +64,8 @@ class RavenSnippet(ET.Element):
     """
     Make a string representation of the snippet. If the "name" attribute is defined, return that. Otherwise, fall back
     to the ET.Element implementation.
+    @ In, None
+    @ Out, repr, str, the string representation of the object
     """
     if name := self.name:
       return name
@@ -66,11 +73,38 @@ class RavenSnippet(ET.Element):
 
   @property
   def name(self) -> str | None:
+    """
+    Name attribute getter
+    @ In, None
+    @ Out, name, str | None, the name
+    """
     return self.get("name", None)
 
   @name.setter
   def name(self, value: str) -> None:
+    """
+    Name attribute setter
+    @ In, value, str, the name to set
+    @ Out, None
+    """
     self.set("name", value)
+
+  def to_assembler_node(self, tag: str) -> ET.Element:
+    """
+    Creates an assembler node from the snippet, if possible. The "class" attribute must be defined.
+    @ In, tag, str, assembler node tag
+    """
+    if not (self.snippet_class and self.name):
+      raise ValueError("The RavenSnippet object cannot be expressed as an Assembler node! The object must have "
+                       "'name' and 'class' attributes defined to create an Assembler node. Current values: "
+                       f"class='{self.snippet_class}', name='{self.name}'.")
+
+    node = ET.Element(tag)
+    node.attrib["class"] = self.snippet_class
+    node.attrib["type"] = self.tag
+    node.text = self.name
+
+    return node
 
   # Subtree building utilities
   def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:
@@ -114,21 +148,3 @@ class RavenSnippet(ET.Element):
           self._add_subelement(child, tag, value)
       else:
         child.text = value
-
-  # Other utility functions
-  def to_assembler_node(self, tag: str) -> ET.Element:
-    """
-    Creates an assembler nodefrom .he snippet, if possible. The "class" attribute must be defined.
-    @ In, tag, str, assembler node tag
-    """
-    if not (self.snippet_class and self.name):
-      raise ValueError("The RavenSnippet object cannot be expressed as an Assembler node! The object must have "
-                       "'name' and 'class' attributes defined to create an Assembler node. Current values: "
-                       f"class='{self.snippet_class}', name='{self.name}'.")
-
-    node = ET.Element(tag)
-    node.attrib["class"] = self.snippet_class
-    node.attrib["type"] = self.tag
-    node.text = self.name
-
-    return node

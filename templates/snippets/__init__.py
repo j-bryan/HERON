@@ -1,3 +1,6 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+
 from .base import RavenSnippet
 from .databases import HDF5, NetCDF
 from .dataobjects import DataSet, HistorySet, PointSet

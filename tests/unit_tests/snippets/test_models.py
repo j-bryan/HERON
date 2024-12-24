@@ -113,9 +113,10 @@ class TestGaussianProcessRegressor(unittest.TestCase, TestModelBase):
 
   def test_target(self):
     self.assertIsNone(self.model.find("Target"))
-    self.model.target = "target"
-    self.assertEqual(self.model.target, "target")
-    self.assertEqual(self.model.find("Target").text, "target")
+    targets = ["val1", "val2"]
+    self.model.target.extend(targets)
+    self.assertListEqual(self.model.target, targets)
+    self.assertListEqual(self.model.find("Target").text, targets)
 
   def test_custom_kernel(self):
     self.model.custom_kernel = "kern"

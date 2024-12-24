@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Database snippets
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-11-08
+"""
 from ..xml_utils import find_node
 from ..decorators import listproperty
 from .base import RavenSnippet
@@ -33,7 +41,7 @@ class Database(RavenSnippet):
   @listproperty
   def variables(self) -> list[str]:
     node = self.find("variables")
-    return getattr(node, "text", []) 
+    return getattr(node, "text", [])
 
   @variables.setter
   def variables(self, value: list[str]) -> list[str]:

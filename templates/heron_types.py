@@ -1,14 +1,15 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
 """
-Alias types of major HERON classes for easier type hinting
+  Alias types of major HERON classes for easier type hinting
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
 """
 from typing import TypeAlias
 
 # load utils
 from .imports import Case, Placeholder, Component, ValuedParam
 
-from .snippets import RavenSnippet
-
 HeronCase: TypeAlias = Case
 Source: TypeAlias = Placeholder
-
-ListLike = list | tuple | set  # iterable but not a mapping (e.g. a dict) and not a string

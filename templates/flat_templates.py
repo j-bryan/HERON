@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Templates for workflows which can be "flat" RAVEN workflows (no need for RAVEN-runs-RAVEN)
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 from pathlib import Path
 from .heron_types import HeronCase, Component, Source
 

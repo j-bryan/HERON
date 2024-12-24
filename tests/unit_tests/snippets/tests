@@ -3,6 +3,10 @@
     type = Unittest
     input = 'test_base.py'
   [../]
+  [./SnippetFactory]
+    type = Unittest
+    input = 'test_factory.py'
+  [../]
   [./databases_NetCDF]
     type = Unittest
     input = 'test_databases.TestNetCDF'

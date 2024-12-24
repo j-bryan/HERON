@@ -26,7 +26,7 @@ class TestOptimizerBase:
   def test_target_evaluation(self):
     self.assertIsNone(self.opt.find("TargetEvaluation"))
     self.assertIsNone(self.opt.target_evaluation)
-    snippet = MockSnippet("data_obj", snippet_class="DataObjects", type="PointSet")
+    snippet = MockSnippet("data_obj", "DataObjects", "PointSet")
     assemb = snippet.to_assembler_node("TargetEvaluation")
     self.opt.target_evaluation = snippet
     self.assertEqual(self.opt.target_evaluation, snippet.name)

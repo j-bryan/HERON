@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Variable group snippet class
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-11-08
+"""
 import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet
@@ -19,8 +27,17 @@ class VariableGroup(RavenSnippet):
 
   @listproperty
   def variables(self) -> list[str]:
-    return self.text 
+    """
+    Getter for list of variables in group
+    @ In, None
+    @ Out, variables, list of variables in group
+    """
+    return self.text
 
   @variables.setter
   def variables(self, value: list[str]) -> None:
+    """
+    Setter for variables list
+    @ In, value, list[str], list of variable names
+    @ Out, None    """
     self.text = value

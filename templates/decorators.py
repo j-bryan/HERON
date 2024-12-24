@@ -1,7 +1,9 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
 """
-Decorators
-@author: Jacob Bryan (@j-bryan)
-@date: 2024-12-11
+  Decorators
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-11
 """
 from typing import Any
 

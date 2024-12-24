@@ -1,24 +1,31 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Utility functions for manipulating XML in ElementTree Elements
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 from typing import Any
 import re
 import xml.etree.ElementTree as ET
 
 
-def parse_xpath(xpath: str):
+def parse_xpath(xpath: str) -> list[dict[str, str | dict]]:
   """
   Parses an XPath with possible attributes and text content into a list of dictionaries.
   Each dictionary contains "tag" and "attrib" keys.
   @ In, xpath, str, an XPath describing a tree of nodes
-  @ Out, nodes, list[dict[str, str]], list of dicts describing the nodes of the tree described by the XPath
+  @ Out, nodes, list[dict[str, str | dict]], list of dicts describing the nodes of the tree described by the XPath
   """
-  # Regular expression to match node with optional attributes
-  # Regex for XPaths created using AiVA
+  # regex to match node with optional attributes
   node_pattern = re.compile(r"(?P<tag>[^/\[]+)(\[@(?P<attrib>[^=]+)=(?P<quote>['\"])(?P<value>[^'\"]+)(?P=quote)\])?")
 
   nodes = []
-  for match in node_pattern.finditer(xpath.strip('/')):
-    tag = match.group('tag')
-    attrib = {match.group('attrib'): match.group('value')} if match.group('attrib') else {}
-    nodes.append({'tag': tag, 'attrib': attrib})
+  for match in node_pattern.finditer(xpath.strip("/")):
+    tag = match.group("tag")
+    attrib = {match.group("attrib"): match.group("value")} if match.group("attrib") else {}
+    nodes.append({"tag": tag, "attrib": attrib})
 
   return nodes
 
@@ -29,7 +36,8 @@ def add_node_to_tree(child_node: ET.Element, parent_path: str, root: ET.Element)
 
   @ In, child_node, ET.Element, object representing the child node to be added
   @ In, xpath, str, string representing the XPath to the parent node
-  @ In, root, ET.Element,
+  @ In, root, ET.Element, the root node
+  @ Out, NOne
   """
   # Parse the XPath into nodes with tag, attributes, and text
   path_parts = parse_xpath(parent_path)
@@ -48,7 +56,7 @@ def add_node_to_tree(child_node: ET.Element, parent_path: str, root: ET.Element)
   # Append the child node to the current (parent) node
   current_node.append(child_node)
 
-def stringify_node_values(node):
+def stringify_node_values(node: ET.Element) -> None:
     """
     Ensure that XML node attribute and text values are strings before trying to express the XML tree as a string
     that is written to file. Traverses the XML tree recursively.
@@ -121,9 +129,9 @@ def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, 
 
   @ In, left, ET.Element, the first tree
   @ In, right, ET.Element, the second tree
-  @ In overwrite, bool, optional,  TODO
-  @ In, match_attrib, bool, optional, TODO
-  @ In, match_text, bool, optional, TODO
+  @ In overwrite, bool, optional, if the values in nodes in left should be overwritten by those in right if matching
+  @ In, match_attrib, bool, optional, if the attributes should be matched
+  @ In, match_text, bool, optional, if the text should be matched
   @ Out, left, ET.Element, root element for the merged subtree
   """
   def is_matching_node(node1, node2):

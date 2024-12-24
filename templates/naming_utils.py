@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Utility functions for getting variable names, cashflow names, objective function names, and so on.
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 import itertools
 from dataclasses import dataclass
 from typing import Any
@@ -73,7 +81,6 @@ def get_result_stats(names: list[str], stats: list[str], case: HeronCase) -> lis
     @ In, names, list[str], result metric names (economics, component activities)
     @ In, stats, list[str], statistic names
     @ In, case, HeronCase, defining Case instance
-    @ In, naming_template, str, template for naming results statistics
     @ Out, names, list[str], list of names of statistics requested for output
   """
   stats_objs = get_statistics(stats, case.stats_metrics_meta)
@@ -86,7 +93,8 @@ def get_capacity_vars(components: list[Component], name_template, *, debug=False
   @ In, components, list[Component], list of HERON components
   @ In, name_template, str, naming template for dispatch variable name, expecting
                             keywords "component", "tracker", and "resource"
-  @ Out, vars, dict, variable name-value pairs
+  @ In, debug, bool, optional, keyword-only argument for whether or not to use the debug value of a capacity variable
+  @ Out, vars, dict[str, Any], variable name-value pairs
   """
   vars = {}
 
@@ -161,11 +169,11 @@ def get_opt_objective(case: HeronCase) -> str:
   objective = f"{stat_name}_{target_var_output_name}"
   return objective
 
-def get_cashflow_names(components):
+def get_cashflow_names(components: list[Component]) -> list[str]:
   """
     Loop through components and collect all the full cashflow names
-    @ In, components, list, list of HERON Component instances for this run
-    @ Out, cfs, list, list of cashflow full names e.g. {comp}_{cf}_CashFlow
+    @ In, components, list[Component], list of HERON Component instances for this run
+    @ Out, cfs, list[str], list of cashflow full names e.g. {comp}_{cf}_CashFlow
   """
   cfs = []
   for comp in components:

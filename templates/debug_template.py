@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  A template for HERON's debug mode
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 from pathlib import Path
 
 from .raven_template import RavenTemplate
@@ -35,7 +43,7 @@ class DebugTemplate(RavenTemplate):
     # Add optional plots
     debug_iostep = self._template.find("Steps/IOStep[@name='debug_output']")
     if case.debug["dispatch_plot"]:
-      disp_plot = self._make_dispatch_plot(case, sources)
+      disp_plot = self._make_dispatch_plot(case)
       self._add_snippet(disp_plot)
       debug_iostep.add_output(disp_plot)
 
@@ -190,7 +198,13 @@ class DebugTemplate(RavenTemplate):
     # A scaling constant needs to be added to the MonteCarlo sampler for the
     sampler.add_constant("scaling", 1.0)
 
-  def _update_vargroups(self, case, components, sources):
+  def _update_vargroups(self, case: HeronCase, components: list[Component], sources: list[Source]):
+    """
+    Updates existing variable group nodes with index and variable names
+    @ In, case, HeronCase, the HERON case object
+    @ In, components, list[Component], the case components
+    @ In, sources, list[Source], the case data sources
+    """
     # Fill out capacities vargroup
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
     capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"], debug=True))
@@ -224,6 +238,12 @@ class DebugTemplate(RavenTemplate):
     self._template.find("VariableGroups/Group[@name='GRO_timeseries_out_scalar']").variables.extend(output_vars)
 
   def _update_dataset_indices(self, case: HeronCase) -> None:
+    """
+    Update the Index node variables for all DataSet nodes to correctly reflect the provided macro, micro, and cluster
+    index names
+    @ In, case, HeronCase, the HERON case
+    @ Out, None
+    """
     # Configure dispatch DataSet indices
     time_name = case.get_time_name()
     year_name = case.get_year_name()
@@ -238,7 +258,12 @@ class DebugTemplate(RavenTemplate):
     for cluster_index in self._template.findall(".//DataSet/Index[@var='_ROM_Cluster']"):
       cluster_index.set("var", cluster_name)
 
-  def _make_dispatch_plot(self, case: HeronCase, sources: list[Source]) -> HeronDispatchPlot:
+  def _make_dispatch_plot(self, case: HeronCase) -> HeronDispatchPlot:
+    """
+    Make a HERON dispatch plot
+    @ In, case, HeronCase, the HERON case
+    @ Out, disp_plot, HeronDispatchPlot, the dispatch plot node
+    """
     disp_plot = HeronDispatchPlot("dispatchPlot")
     dispatch_dataset = self._template.find("DataObjects/DataSet[@name='dispatch']")
     disp_plot.source = dispatch_dataset
@@ -248,6 +273,11 @@ class DebugTemplate(RavenTemplate):
     return disp_plot
 
   def _make_cashflow_plot(self) -> TealCashFlowPlot:
+    """
+    Make a TEAL cashflow plot
+    @ In, None,
+    @ Out, cashflow_plot, TealCashFlowPlot, the cashflow plot node
+    """
     cashflow_plot = TealCashFlowPlot("cashflow_plot")
     cashflows = self._template.find("DataObjects/HistorySet[@name='cashflows']")
     cashflow_plot.source = cashflows

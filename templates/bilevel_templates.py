@@ -1,4 +1,11 @@
-from typing import Any
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Templates for bilevel RAVEN workflows (i.e. RAVEN-runs-RAVEN workflows)
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 from pathlib import Path
 import shutil
 
@@ -7,6 +14,7 @@ from .heron_types import HeronCase, Component, Source
 from .naming_utils import get_capacity_vars, get_component_activity_vars, get_opt_objective
 
 from .raven_template import RavenTemplate
+from .snippets.runinfo import RunInfo
 from .snippets.variablegroups import VariableGroup
 from .snippets.databases import NetCDF
 from .snippets.dataobjects import PointSet
@@ -64,6 +72,11 @@ class BilevelTemplate(RavenTemplate):
     self.outer.set_inner_data_name(disp_results_name, case.data_handling["inner_to_outer"])
 
   def writeWorkflow(self, loc: str) -> None:
+    """
+    Write RAVEN workflow
+    @ In, loc, str, path to write workflows to
+    @ Out, None
+    """
     self.outer.writeWorkflow(loc)
     self.inner.writeWorkflow(loc)
 
@@ -79,9 +92,15 @@ class BilevelTemplate(RavenTemplate):
 
 
 class OuterTemplate(RavenTemplate):
+  """ Base class for modifying the outer workflow in bilevel workflows """
   write_name = Path("outer.xml")
 
   def __init__(self):
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
     super().__init__()
     self.inner_sampler = None
 
@@ -100,14 +119,20 @@ class OuterTemplate(RavenTemplate):
     self._configure_variable_groups(case, components)
 
   def set_inner_data_name(self, name: str, inner_to_outer: str) -> None:
-    model = self._template.find("Models/Code[@subType='RAVEN']")
+    """
+    Give the RAVEN code model the place to look for the inner's data
+    @ In, name, str, the name of the data object
+    @ In, inner_to_outer, str, the type of file used to pass the data ("csv" or "netcdf")
+    @ Out, None
+    """
+    model = self._template.find("Models/Code[@subType='RAVEN']")  # type: RavenCode
     model.set_inner_data_handling(name, inner_to_outer)
 
-  def _initialize_runinfo(self, case: HeronCase) -> None:
+  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
-    @ Out, None
+    @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
     case_name = self.namingTemplates['jobname'].format(case=case.name, io='o')
     run_info = super()._initialize_runinfo(case, case_name)
@@ -127,9 +152,14 @@ class OuterTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
 
+    return run_info
+
   def _configure_raven_model(self, case: HeronCase, components: list[Component]) -> RavenCode:
     """
     Configures the inner RAVEN code. The bilevel outer template MUST have a <Code subType="RAVEN"> node defined.
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], the case components
+    @ Out, raven, RavenCode, the RAVEN code node
     """
     raven = self._template.find("Models/Code[@subType='RAVEN']")  # type: RavenCode
 
@@ -160,7 +190,13 @@ class OuterTemplate(RavenTemplate):
 
     return raven
 
-  def _configure_variable_groups(self, case: HeronCase, components: list[Component]):
+  def _configure_variable_groups(self, case: HeronCase, components: list[Component]) -> None:
+    """
+    Fills out variable groups with capacity and results names
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], the case components
+    @ Out, None
+    """
     # Set up some helpful variable groups
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")
     capacities_vars = list(get_capacity_vars(components, self.namingTemplates["variable"]))
@@ -171,6 +207,12 @@ class OuterTemplate(RavenTemplate):
     results_vargroup.variables.extend(results_vars)
 
   def _set_batch_size(self, batch_size: int, case: HeronCase) -> None:
+    """
+    Sets the batch size in RunInfo and sets internalParallel to True
+    @ In, batch_size, int, the batch size
+    @ In, case, HeronCase, the HERON case
+    @ Out, None
+    """
     case.outerParallel = batch_size
     run_info = self._template.find("RunInfo")
     run_info.batch_size = batch_size
@@ -232,6 +274,7 @@ class OuterTemplateOpt(OuterTemplate):
 
 
 class OuterTemplateSweep(OuterTemplate):
+  """ Sets up the outer workflow for sweep mode """
   template_path = Path("xml/outer_sweep.xml")
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
@@ -297,10 +340,6 @@ class InnerTemplate(RavenTemplate):
     """
     super().createWorkflow(case, components, sources)
 
-    # Add dispatch variables to GRO_full_dispatch
-    # dispatch_vars = get_component_activity_vars(components, self.namingTemplates["dispatch"])
-    # self._template.find("VariableGroups/Group[@name='GRO_full_dispatch']").variables.extend(dispatch_vars)
-
     # Set the index variable names for the time index names
     self._set_time_vars(case.get_time_name(), case.get_year_name())
 
@@ -346,7 +385,7 @@ class InnerTemplate(RavenTemplate):
     """
     # Work out how the inner results should be routed back to the outer
     metrics_stats = self._template.find("DataObjects/PointSet[@name='metrics_stats']")
-    write_metrics_stats = self._template.find(f"Steps/IOStep[@name='database']")
+    write_metrics_stats = self._template.find("Steps/IOStep[@name='database']")
     self._dispatch_results_name = "disp_results"
     data_handling = case.data_handling["inner_to_outer"]
     if data_handling == "csv":
@@ -368,7 +407,7 @@ class InnerTemplate(RavenTemplate):
       raise ValueError("No dispatch results object name has been set! Perhaps the inner workflow hasn't been created yet?")
     return self._dispatch_results_name
 
-  def _initialize_runinfo(self, case: HeronCase) -> None:
+  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
@@ -385,6 +424,8 @@ class InnerTemplate(RavenTemplate):
       run_info.batch_size = case.innerParallel
     else:
       run_info.batch_size = 1
+
+    return run_info
 
   def _add_case_labels_to_sampler(self, case_labels: dict[str, str], sampler: Sampler) -> None:
     """
@@ -412,7 +453,7 @@ class InnerTemplate(RavenTemplate):
     @ In, year_name, str, name of year variable
     @ Out, None
     """
-    group = self._template.find(f"VariableGroups/Group[@name='GRO_dispatch']")
+    group = self._template.find("VariableGroups/Group[@name='GRO_dispatch']")
     group.variables.extend([time_name, year_name])
 
     for time_index in self._template.findall("DataObjects/DataSet/Index[@var='Time']"):
@@ -448,7 +489,7 @@ class InnerTemplate(RavenTemplate):
     Add capacity values to the sampler as constants
     @ In, sampler, Sampler, the sampler
     @ In, components, list[Component], the case components
-    @ out, None
+    @ Out, None
     """
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")  # type: VariableGroup
     capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])

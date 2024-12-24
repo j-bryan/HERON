@@ -1,3 +1,11 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
+"""
+  Imports from ravenframework and HERON.src
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
+"""
 import sys
 from pathlib import Path
 

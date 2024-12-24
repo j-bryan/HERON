@@ -1,3 +1,5 @@
+# Copyright 2020, Battelle Energy Alliance, LLC
+# ALL RIGHTS RESERVED
 """
 Optimization features
 
@@ -10,7 +12,8 @@ from .samplers import Sampler
 from .dataobjects import DataObject
 
 
-class Optimizer(Sampler):  # inheritingfrom .ampler mimics RAVEN inheritance structure
+# Inheriting from Sampler mimics RAVEN inheritance structure
+class Optimizer(Sampler):
   """ A base class for RAVEN optimizer XML snippets """
   snippet_class = "Optimizers"
 
@@ -36,20 +39,40 @@ class Optimizer(Sampler):  # inheritingfrom .ampler mimics RAVEN inheritance str
 
   @property
   def objective(self) -> str | None:
+    """
+    Optimization objective getter
+    @ In, None
+    @ Out, objective, str | None, the objective
+    """
     node = self.find("objective")
     return None if node is None else node.text
 
   @objective.setter
   def objective(self, value: str) -> None:
+    """
+    Optimization objective getter
+    @ In, value, str, the objective
+    @ Out, None
+    """
     find_node(self, "objective").text = value
 
   @property
   def target_evaluation(self) -> str | None:
+    """
+    Target evaluation getter
+    @ In, None
+    @ Out, target_evaluation, str | None, the target evaluation data object name
+    """
     node = self.find("TargetEvaluation")
     return None if node is None else node.text
 
   @target_evaluation.setter
   def target_evaluation(self, value: DataObject) -> None:
+    """
+    Target evaluation setter
+    @ In, value, DataObject, the target evaluation data object
+    @ Out, None
+    """
     if not getattr(value, "snippet_class", None) == "DataObjects":
       raise TypeError(f"Optimizer evaluation target must be set with a DataObject object. Received '{type(value)}'")
     assemb = value.to_assembler_node("TargetEvaluation")
@@ -66,6 +89,7 @@ class Optimizer(Sampler):  # inheritingfrom .ampler mimics RAVEN inheritance str
 #########################
 
 class BayesianOptimizer(Optimizer):
+  """ Bayesian optimizer snippet class """
   tag = "BayesianOptimizer"
 
   default_settings = {
@@ -88,10 +112,20 @@ class BayesianOptimizer(Optimizer):
     "Acquisition": ""
   }
 
-  def __init__(self, name: str | None = None):
+  def __init__(self, name: str | None = None) -> None:
+    """
+    Constructor
+    @ In, name, str, optional, entity name
+    @ Out, None
+    """
     super().__init__(name, self.default_settings)
 
-  def set_opt_settings(self, opt_settings):
+  def set_opt_settings(self, opt_settings: dict) -> None:
+    """
+    Sets optimization settings
+    @ In, opt_settings, dict, optimization settings
+    @ Out, None
+    """
     super().set_opt_settings(opt_settings)
 
     try:
@@ -129,18 +163,32 @@ class BayesianOptimizer(Optimizer):
       find_node(model_selection, k).text = v
 
   def set_sampler(self, sampler: Sampler) -> None:
+    """
+    Set the sampler used for initializing the optimizer
+    @ In, sampler, Sampler, the initialization sampler
+    @ Out, None
+    """
     sampler_node = find_node(self, "Sampler")
     assemb_node = sampler.to_assembler_node("Sampler")
     sampler_node.attrib = assemb_node.attrib
     sampler_node.text = assemb_node.text
 
   def set_rom(self, rom: RavenSnippet) -> None:
+    """
+    Set the ROM to be used as a surrogate in the Bayesian optimization
+    @ In, rom, RavenSnippet
+    """
+    if rom.snippet_class != "Models":
+      raise TypeError(f"An object which is not a model (type: '{type(rom)}') was provided to the BayesianOptimizer "
+                      "to be the ROM.")
     model_node = find_node(self, "ROM")
     assemb_node = rom.to_assembler_node("ROM")
     model_node.attrib = assemb_node.attrib
     model_node.text = assemb_node.text
 
+
 class ExpectedImprovement(RavenSnippet):
+  """ Expected improvement acquisition function """
   tag = "ExpectedImprovement"
 
   default_settings = {
@@ -148,11 +196,16 @@ class ExpectedImprovement(RavenSnippet):
     "seedingCount": 30
   }
 
-  def __init__(self, settings: dict = {}) -> None:
-    settings = self.default_settings | settings
-    super().__init__(subelements=settings)
+  def __init__(self) -> None:
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
+    super().__init__(subelements=self.default_settings)
 
 class ProbabilityOfImprovement(RavenSnippet):
+  """ Probability of improvement acquisition function """
   tag = "ProbabilityOfImprovement"
 
   default_settings = {
@@ -163,11 +216,16 @@ class ProbabilityOfImprovement(RavenSnippet):
     "transient": "Constant"
   }
 
-  def __init__(self, settings: dict = {}) -> None:
-    settings = self.default_settings | settings
-    super().__init__(subelements=settings)
+  def __init__(self) -> None:
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
+    super().__init__(subelements=self.default_settings)
 
 class LowerConfidenceBound(RavenSnippet):
+  """ Lower confidence bound acquisition function """
   tag = "LowerConfidenceBound"
 
   default_settings = {
@@ -177,16 +235,20 @@ class LowerConfidenceBound(RavenSnippet):
     "transient": "Constant"
   }
 
-  def __init__(self, settings: dict = {}) -> None:
-    settings = self.default_settings | settings
-    super().__init__(subelements=settings)
-
+  def __init__(self) -> None:
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
+    super().__init__(subelements=self.default_settings)
 
 ####################
 # Gradient Descent #
 ####################
 
 class GradientDescent(Optimizer):
+  """ Gradient descent optimizer snippet class """
   tag = "GradientDescent"
 
   default_settings = {
@@ -216,9 +278,19 @@ class GradientDescent(Optimizer):
   }
 
   def __init__(self, name: str | None = None) -> None:
+    """
+    Constructor
+    @ In, name, str, optional, entity name
+    @ Out, None
+    """
     super().__init__(name, self.default_settings)
 
   def set_opt_settings(self, opt_settings: dict) -> None:
+    """
+    Sets the optimization settings
+    @ In, opt_settings, dict, optimization settings
+    @ Out, None
+    """
     super().set_opt_settings(opt_settings)
 
     try:

@@ -45,15 +45,6 @@ class TestPrintOutStream(unittest.TestCase, TestOutStreamBase):
     self.assertIsNotNone(node)
     self.assertEqual(node.text, "csv")
 
-  def test_add_parameter(self):
-    tag = "param_tag"
-    val = "param_val"
-    self.assertIsNone(self.outstream.find(tag))
-    self.outstream.add_parameter(tag, val)
-    node = self.outstream.find(tag)
-    self.assertIsNotNone(node)
-    self.assertEqual(node.text, val)
-
 
 class TestOptPathPlot(unittest.TestCase, TestOutStreamBase):
   def setUp(self):

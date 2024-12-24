@@ -1,7 +1,10 @@
 # Copyright 2020, Battelle Energy Alliance, LLC
 # ALL RIGHTS RESERVED
 """
-  Holds the template information for creating LCOE SWEEP OPT input files.
+  Driver for selecting the appropriate template, then creating and writing the workflow(s)
+
+  @author: Jacob Bryan (@j-bryan)
+  @date: 2024-12-23
 """
 import dill as pk
 from pathlib import Path

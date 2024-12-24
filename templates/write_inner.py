@@ -1,7 +1,13 @@
 from typing import Any
 import xml.etree.ElementTree as ET
 
-def increment(item, d):
+def increment(item: str, d: int) -> str:
+  """
+  Increment the right value for strings like "{%d}_{%d}"
+  @ In, item, str, the full string
+  @ In, d, int, the right value to set
+  @ Out, item, str, the incremented item
+  """
   item = item.strip().rsplit("_", 1)[0] + f"_{d}"
   return item
 
