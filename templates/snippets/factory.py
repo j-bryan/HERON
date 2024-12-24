@@ -107,6 +107,11 @@ class SnippetFactory:
 
   @staticmethod
   def _get_node_key(node: ET.Element) -> str:
+    """
+    Get the registry key for an XML node
+    @ In, node, ET.Element, the XML node
+    @ Out, key, str, the registry key
+    """
     key = node.tag
     if subtype := node.get("subType", None):
       key += f"[@subType='{subtype}']"

@@ -84,7 +84,7 @@ class DebugTemplate(RavenTemplate):
 
       # Set up case to use synthetic history ROM
       if any(s.is_type("ARMA") for s in sources):
-        self._use_time_series_rom(monte_carlo, case, components, sources)
+        self._use_time_series_rom(monte_carlo, case, sources)
 
       # Add capacities to sampler
       for sampled_var, vals in cap_vars.items():
@@ -163,12 +163,11 @@ class DebugTemplate(RavenTemplate):
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
 
-  def _use_time_series_rom(self, sampler: MonteCarlo, case: HeronCase, components: list[Component], sources: list[Source]):
+  def _use_time_series_rom(self, sampler: MonteCarlo, case: HeronCase, sources: list[Source]) -> None:
     """
     Sets the workflow up to sample a time historyfrom . PickledROM model
     @ In sampler, MonteCarlo, a MonteCarlo sampler snippet
     @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
     @ In, sources, list[Source], external models, data, and functions
     @ Out, None
     """
@@ -198,12 +197,13 @@ class DebugTemplate(RavenTemplate):
     # A scaling constant needs to be added to the MonteCarlo sampler for the
     sampler.add_constant("scaling", 1.0)
 
-  def _update_vargroups(self, case: HeronCase, components: list[Component], sources: list[Source]):
+  def _update_vargroups(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     """
     Updates existing variable group nodes with index and variable names
     @ In, case, HeronCase, the HERON case object
     @ In, components, list[Component], the case components
     @ In, sources, list[Source], the case data sources
+    @ Out, None
     """
     # Fill out capacities vargroup
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")

@@ -84,6 +84,11 @@ class HeronDispatchPlot(OutStream):
 
   @classmethod
   def from_xml(cls, node: ET.Element) -> "HeronDispatchPlot":
+    """
+    Alternate construction from XML node
+    @ In, node, ET.Element, the XML node
+    @ Out, plot, HeronDispatchPlot, the corresponding snippet object
+    """
     plot = cls()
     plot.attrib |= node.attrib
     for sub in node:

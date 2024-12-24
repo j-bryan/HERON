@@ -18,9 +18,7 @@ from .debug_template import DebugTemplate
 
 
 class TemplateDriver(Base):
-  # Map HERON features (determined by parts of case, components, and sources objects) to their FeatureDrivers.
-  # Decide which template(s) to load.
-  # Set naming conventions used throughout the templates
+  """ Selects the best template to use for the given case, populate the workflow, and write it to file """
   def __init__(self) -> None:
     """
     Constructor

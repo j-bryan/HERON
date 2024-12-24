@@ -47,7 +47,7 @@ def distribution_class_from_spec(spec) -> type[Distribution]:
   #      them with their classes make the developer experience better when using RavenSnippets when building
   #      templates.
   # I've moved the function inside here to limit access to it from elsewhere in the code
-  def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None):
+  def node_property(cls: ET.Element, prop_name: str, node_tag: str | None = None) -> None:
     """
     Creates a class property that gets/sets a child node text value
     @ In, cls, ET.Element, the ET.Element class or a subclass of it

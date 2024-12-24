@@ -35,6 +35,13 @@ class FlatMultiConfigTemplate(RavenTemplate):
   }
 
   def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+    """
+    Populate the XML template with case information
+    @ In, case, HeronCase, the HERON case
+    @ In, components, list[Component], the case components
+    @ In, sources, list[Source], the case data sources
+    @ Out, None
+    """
     super().createWorkflow(case, components, sources)
 
     # Set up some helpful variable groups
@@ -83,7 +90,11 @@ class FlatMultiConfigTemplate(RavenTemplate):
     # Update the parallel settings based on the number of sampled variables if the number of outer parallel runs
     # was not specified before.
     if case.outerParallel == 0 and case.useParallel:
-      self._update_batch_size(case)
+      sampler = self._template.find("Samplers/Grid")
+      run_info = self._template.find("RunInfo")
+      case.outerParallel = sampler.num_sampled_vars + 1
+      run_info.batch_size = case.outerParallel
+      run_info.internal_parallel = True
 
   def _initialize_runinfo(self, case: HeronCase) -> None:
     """

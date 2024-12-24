@@ -134,10 +134,22 @@ def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, 
   @ In, match_text, bool, optional, if the text should be matched
   @ Out, left, ET.Element, root element for the merged subtree
   """
-  def is_matching_node(node1, node2):
+  def is_matching_node(node1: ET.Element, node2: ET.Element) -> bool:
+    """
+    Do two nodes match?
+    @ In, node1, ET.Element, the first node
+    @ In, node2, ET.Element, the second node
+    @ Out, is_matching_node, bool, if the nodes meet the matching criteria
+    """
     return (node1.attrib == node2.attrib or not match_attrib) and (node1.text == node2.text or not match_text)
 
-  def find_matching_node(node, candidates):
+  def find_matching_node(node: ET.Element, candidates: list[ET.Element]) -> ET.Element | None:
+    """
+    Find the node which matches 'node' among 'candidates'
+    @ In, node, ET.Element, node to match
+    @ In, candidates, list[ET.Element], possibly matching nodes
+    @ Out, candidate, ET.Element | None, the matching node if one is found
+    """
     for candidate in candidates:
       if node.tag != candidate.tag:
         continue
@@ -145,7 +157,13 @@ def merge_trees(left: ET.Element, right: ET.Element, *, overwrite: bool = True, 
         return candidate
     return None
 
-  def merge_nodes(left_node, right_node):
+  def merge_nodes(left_node: ET.Element, right_node: ET.Element) -> None:
+    """
+    Merge the right_node tree into the left_node tree
+    @ In, left_node, ET.Element, the primary tree
+    @ In, right_node, ET.Element, the tree to merge in
+    @ Out, None
+    """
     matching_node = find_matching_node(right_node, left_node)
     if matching_node is not None:
       if overwrite:

@@ -19,6 +19,11 @@ class VariableGroup(RavenSnippet):
 
   @classmethod
   def from_xml(cls, node: ET.Element) -> "VariableGroup":
+    """
+    Alternate construction from XML node
+    @ In, node, ET.Element, the XML node
+    @ Out, vargroup, VariableGroup, the corresponding variable group object
+    """
     vargroup = cls(node.get("name"))
     if node.text:
       vars = [varname.strip() for varname in node.text.split(",")]

@@ -28,7 +28,7 @@ from .snippets.steps import MultiRun
 class BilevelTemplate(RavenTemplate):
   """ Coordinates information between inner and outer templates for bilevel workflows """
 
-  def __init__(self, mode: str, has_static_history: bool, has_synthetic_history: bool):
+  def __init__(self, mode: str, has_static_history: bool, has_synthetic_history: bool) -> None:
     """
     Constructor
     @ In, case, HeronCase, the HERON case object
@@ -49,6 +49,11 @@ class BilevelTemplate(RavenTemplate):
       raise ValueError(f"Unsupported case mode '{mode}' in Bilevel workflow template.")
 
   def loadTemplate(self) -> None:
+    """
+    Load template files
+    @ In, None
+    @ Out, NOne
+    """
     self.inner.loadTemplate()
     self.outer.loadTemplate()
 
@@ -95,7 +100,7 @@ class OuterTemplate(RavenTemplate):
   """ Base class for modifying the outer workflow in bilevel workflows """
   write_name = Path("outer.xml")
 
-  def __init__(self):
+  def __init__(self) -> None:
     """
     Constructor
     @ In, None
@@ -320,7 +325,7 @@ class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
   write_name = Path("inner.xml")
 
-  def __init__(self):
+  def __init__(self) -> None:
     """
     Constructor
     @ In, None

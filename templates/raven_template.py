@@ -68,6 +68,11 @@ class RavenTemplate(Template):
   FINANCIAL_STATS_NAMES = ["sharpeRatio", "sortinoRatio", "expectedShortfall", "valueAtRisk", "gainLossRatio"]
 
   def __init__(self) -> None:
+    """
+    Constructor
+    @ In, None
+    @ Out, None
+    """
     super().__init__()
     # Naming templates
     self.addNamingTemplates({"jobname"        : "{case}_{io}",
@@ -152,7 +157,7 @@ class RavenTemplate(Template):
     if isinstance(snippet, ET.Element) and not isinstance(snippet, RavenSnippet):
       raise TypeError(f"The XML block to be added is not a RavenSnippet object. Received type: {type(snippet)}. "
                       "Perhaps something went wrong when parsing the template XML, and the correct RavenSnippet "
-                      "suclass wasn't found?")
+                      "subclass wasn't found?")
     if snippet is None:
       raise ValueError("Received None instead of a RavenSnippet object. Perhaps something went wrong when finding "
                        "an XML node?")
@@ -209,27 +214,24 @@ class RavenTemplate(Template):
     return run_info
 
   def _add_step_to_sequence(self, step: Step, index: int | None = None) -> None:
+    """
+    Add a step to the Sequence node
+    @ In, step, Step, the step to add
+    @ In, index, int, optional, the index to add the step at
+    @ Out, None
+    """
     run_info = self._template.find("RunInfo")  # type: RunInfo
     idx = index if index is not None else len(run_info.sequence)
     run_info.sequence.insert(idx, step)
 
-  def _update_batch_size(self, case: HeronCase) -> None:
-    if case.get_mode() == "sweep":
-      sampler = self._template.find("Samplers/Grid")
-    elif case.get_opt_strategy() == "BayesianOpt":
-      sampler = self._template.find("Optimizers/BayesianOptimizer")
-    elif case.get_opt_strategy() == "GradientDescent":
-      sampler = self._template.find("Optimizers/GradientDescent")
-    else:
-      raise ValueError("Sampler not found")
-
-    run_info = self._template.find("RunInfo")
-    case.outerParallel = sampler.num_sampled_vars + 1
-    run_info.batch_size = case.outerParallel
-    run_info.internal_parallel = True
-
   # Steps
   def _load_file_to_object(self, source: Source, target: RavenSnippet) -> IOStep:
+    """
+    Load a source file to a target object
+    @ In, source, Source, the source to load
+    @ In, target, RavenSnippet, the object to load to
+    @ Out, step, IOStep, the step used to do the loading
+    """
     # Get the file to load. Might already exist in the template XML
     file = self._template.find("Files/Input[@name='{source.name}']")  # type: File
     if file is None:
