@@ -71,11 +71,19 @@ class TestRunInfo(unittest.TestCase):
 
   def test_internal_parallel(self):
     self.assertIsNone(self.run_info.find("internalParallel"))
-    self.assertIsNone(self.run_info.internal_parallel)
+    self.assertFalse(self.run_info.use_internal_parallel)
+
+    # Set to True
     internal_parallel = True
-    self.run_info.internal_parallel = internal_parallel
-    self.assertEqual(self.run_info.internal_parallel, internal_parallel)
+    self.run_info.use_internal_parallel = internal_parallel
+    self.assertEqual(self.run_info.use_internal_parallel, internal_parallel)
     self.assertEqual(self.run_info.find("internalParallel").text, internal_parallel)
+
+    # Set to False
+    internal_parallel = False
+    self.run_info.use_internal_parallel = internal_parallel
+    self.assertEqual(self.run_info.use_internal_parallel, internal_parallel)
+    self.assertIsNone(self.run_info.find("internalParallel"))
 
   def test_num_mpi(self):
     self.assertIsNone(self.run_info.find("NumMPI"))

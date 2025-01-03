@@ -6,6 +6,10 @@
   @author: Jacob Bryan (@j-bryan)
   @date: 2024-11-08
 """
+import re
+import socket
+from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from .base import RavenSnippet
 from .steps import Step
@@ -17,79 +21,32 @@ class RunInfo(RavenSnippet):
   """ Snippet class for the RAVEN XML RunInfo block """
   tag = "RunInfo"
 
-  # @classmethod
-  # def from_xml(cls, node: ET.Element) -> "RunInfo":
-  #   run_info = merge_trees(cls(), node)
-  #   sequence = node.find("Sequence")
-  #   if text := getattr(sequence, "text", None):
-  #     steps = [v.strip() for v in text.split(",")]
-  #     run_info.sequence = steps
-  #   return run_info
-
   def set_parallel_run_settings(self, parallel_run_info: dict[str, str]) -> None:
     """
     Set how to run in parallel
     @ In, parallel_run_info, dict[str, str], settings for parallel execution
     @ Out, None
     """
-    # NOTE: This doesn't handle non-mpi modes like torque or other custom ones
-    mode = find_node(self, "mode")
-    mode.text = "mpi"
-    qsub = find_node(mode, "runQSUB")
+    # Get special pre-sets for known computing environments
+    hostname = socket.gethostbyaddr(socket.gethostname())[0]
+    parallel_xml = get_parallel_xml(hostname)
+    for child in parallel_xml.find("useParallel"):
+      self.append(child)
+
+    # Add parallel method settings from parallel_xml, if present
+    outer_node = parallel_xml.find("outer")
+    if outer_node is None:
+      self.use_internal_parallel = True
+    else:
+      for child in outer_node:
+        self.append(child)
+
     # Handle "memory" setting first since its parent node is the "mode" node
     if memory_val := parallel_run_info.pop("memory", None):
-      find_node(mode, "memory").text = memory_val
+      find_node(self, "mode/memory").text = memory_val
     # All other settings get tacked onto the main RunInfo block
     for tag, value in parallel_run_info.items():
       find_node(self, tag).text = value
-
-  # TODO refactor to fit snippet style
-  # from PR #397
-  def _modify_parallel(self, case, template):
-    if case.outerParallel:
-      self._modify_outer_parallel(template, case)
-    if case.useParallel:
-      if self.parallel_xml is None:
-        #this doesn't handle non-mpi modes like torque or other custom ones
-        # so it is highly recommended that a parallel xml template be created
-        # for hosts that are using those.
-        mode = xmlUtils.newNode('mode', text='mpi')
-        mode.append(xmlUtils.newNode('runQSUB'))
-      else:
-        for child in self.parallel_xml.find('useParallel'):
-          if child.tag == 'mode':
-            mode = child
-          else:
-            run_info.append(child)
-      if 'memory' in case.parallelRunInfo:
-        mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
-      for sub in case.parallelRunInfo:
-        run_info.append(xmlUtils.newNode(sub, text=str(case.parallelRunInfo[sub])))
-      run_info.append(mode)
-    if case.innerParallel:
-      run_info.append(xmlUtils.newNode('NumMPI', text=case.innerParallel))
-
-  # TODO refactor to fit snippet style
-  # from PR #397
-  def _modify_outer_parallel(self, template, case):
-    """
-      Modifies the outer parallel stuff. This should only be called if
-      case.outerparallel > 0
-      @ In, template, xml.etree.ElementTree.Element, root of XML to modify
-      @ In, case, HERON Case, defining Case instance
-      @ Out, None
-
-    """
-    run_info = template.find('RunInfo')
-    # set outer batchsize and InternalParallel
-    batchSize = run_info.find('batchSize')
-    batchSize.text = f'{case.outerParallel}'
-    if self.parallel_xml is None:
-      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
-    else:
-      #append all the children in the 'outer' element
-      for child in self.parallel_xml.find('outer'):
-        run_info.append(child)
 
   @property
   def job_name(self) -> str | None:
@@ -149,23 +106,28 @@ class RunInfo(RavenSnippet):
     find_node(self, "batchSize").text = int(value)
 
   @property
-  def internal_parallel(self) -> bool | None:
+  def use_internal_parallel(self) -> bool:
     """
     Getter for internal parallel flag
     @ In, None
-    @ Out, internal_parallel, bool | None, the internal parallel flag
+    @ Out, internal_parallel, bool, the internal parallel flag
     """
     node = self.find("internalParallel")
-    return None if node is None else bool(getattr(node, "text", False))
+    return False if node is None else bool(getattr(node, "text", False))
 
-  @internal_parallel.setter
-  def internal_parallel(self, value: bool) -> None:
+  @use_internal_parallel.setter
+  def use_internal_parallel(self, value: bool) -> None:
     """
     Setter for internal parallel flag
     @ In, value, bool, the internal parallel flag
     @ Out, None
     """
-    find_node(self, "internalParallel").text = bool(value)
+    # Set node text if True, remove node if False
+    node = find_node(self, "internalParallel")
+    if value:
+      node.text = value
+    else:
+      self.remove(node)
 
   @property
   def num_mpi(self) -> int | None:
@@ -204,3 +166,37 @@ class RunInfo(RavenSnippet):
     @ Out, None
     """
     find_node(self, "Sequence").text = [str(v).strip() for v in value]
+
+#####################
+# UTILITY FUNCTIONS #
+#####################
+
+def get_default_parallel_settings() -> ET.Element:
+  """
+  The default parallelization settings. Used when the hostname doesn't match any parallel settings
+  XMLs found in HERON/templates/parallel.
+  @ In, None
+  @ Out, parallel, ET.Element, the default parallel settings
+  """
+  parallel = ET.Element("parallel")
+  use_parallel = ET.SubElement(parallel, "useParallel")
+  mode = ET.SubElement(use_parallel, "mode")
+  mode.text = "mpi"
+  mode.append(ET.Element("runQSUB"))
+  return parallel
+
+
+def get_parallel_xml(hostname: str) -> ET.Element:
+  """
+  Finds the xml file to go with the given hostname.
+  @ In, hostname, string with the hostname to search for
+  @ Out, xml, xml.eTree.ElementTree, if an xml file is found then use it, otherwise return the default settings
+  """
+  # Should this allow loading from another directory (such as one next to the input file?)
+  path = Path(__file__).parent / "parallel"
+  for filename in path.glob("*.xml"):
+    cur_xml = ET.parse(filename).getroot()
+    regexp = cur_xml.attrib["hostregexp"]
+    if re.match(regexp, hostname):
+      return cur_xml
+  return get_default_parallel_settings()

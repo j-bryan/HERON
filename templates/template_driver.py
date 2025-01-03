@@ -8,9 +8,6 @@
 """
 import dill as pk
 from pathlib import Path
-import socket
-import glob
-import re
 
 from .imports import Base
 from .heron_types import HeronCase, Component, Source
@@ -29,7 +26,7 @@ class TemplateDriver(Base):
     @ Out, None
     """
     super().__init__()
-    self.template = None  # type: RavenTemplate
+    self.template: RavenTemplate = None
 
   ##############
   # Public API #

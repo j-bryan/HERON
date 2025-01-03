@@ -143,15 +143,16 @@ class OuterTemplate(RavenTemplate):
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel
-    if case.outerParallel:
+    if case.outerParallel > 0:
       # set outer batchsize and InternalParallel
       run_info.batch_size = case.outerParallel
-      run_info.internal_parallel = True
+      run_info.use_internal_parallel = True
     else:
       run_info.batch_size = 1
 
     if case.useParallel:
-      #XXX this doesn't handle non-mpi modes like torque or other custom ones
+      # Fills in parallel settings for template RunInfo from case. Also appliespre-sets for known
+      # hostnames (e.g. sawtooth, bitterroot), as specified in the HERON/templates/parallel/*.xml files.
       run_info.set_parallel_run_settings(case.parallelRunInfo)
 
     if case.innerParallel:
@@ -424,8 +425,8 @@ class InnerTemplate(RavenTemplate):
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel settings
-    if case.innerParallel:
-      run_info.internal_parallel = True
+    if case.innerParallel > 0:
+      run_info.use_internal_parallel = True
       run_info.batch_size = case.innerParallel
     else:
       run_info.batch_size = 1
