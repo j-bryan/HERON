@@ -1,5 +1,5 @@
 #!/bin/bash
-SCRIPT_DIRNAME=`dirname $0`
+SCRIPT_DIRNAME=`dirname $(readlink -f "$0")`
 HERON_DIR=`(cd $SCRIPT_DIRNAME/..; pwd)`
 cd $HERON_DIR
 RAVEN_DIR=`python -c 'from src._utils import get_raven_loc; print(get_raven_loc())'`

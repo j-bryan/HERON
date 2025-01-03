@@ -25,3 +25,32 @@ wanted to run the integration test \texttt{production\_flex}, I could do the fol
 \end{lstlisting}
 Alternatively, you can use Python to run \texttt{HERON/src/main.py} with the HERON XML input as
 argument; however, this will bypass loading the \texttt{raven\_libraries} and other initialization.
+
+\subsection{Parallel Notes}
+
+HERON uses RAVEN's parallel tools. Since running on different clusters
+can require somewhat different commands, HERON allows the commands
+used for parallel running to be chosen based on the hostname.
+
+These are stored in the directory \texttt{templates/parallel}. Example:
+
+\begin{lstlisting}[style=XML]
+<parallel hostregexp="sawtooth[12].*">
+  <useParallel>
+    <mode>
+      mpi
+      <runQSUB />
+    </mode>
+  </useParallel>
+  <outer>
+    <parallelMethod>ray</parallelMethod>
+  </outer>
+</parallel>
+\end{lstlisting}
+
+The \texttt{hostregexp} is a regular expression and the first regular
+expression that matches the hostname will be used as the template for
+running in parallel.  If parallel is used, then the section in
+\texttt{useParallel} will be added to the RunInfo in the RAVEN
+input. If the batch size is greater than one then the code in the
+section \texttt{outer} will be used.

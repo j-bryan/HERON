@@ -43,6 +43,54 @@ class RunInfo(RavenSnippet):
     for tag, value in parallel_run_info.items():
       find_node(self, tag).text = value
 
+  # TODO refactor to fit snippet style
+  # from PR #397
+  def _modify_parallel(self, case, template):
+    if case.outerParallel:
+      self._modify_outer_parallel(template, case)
+    if case.useParallel:
+      if self.parallel_xml is None:
+        #this doesn't handle non-mpi modes like torque or other custom ones
+        # so it is highly recommended that a parallel xml template be created
+        # for hosts that are using those.
+        mode = xmlUtils.newNode('mode', text='mpi')
+        mode.append(xmlUtils.newNode('runQSUB'))
+      else:
+        for child in self.parallel_xml.find('useParallel'):
+          if child.tag == 'mode':
+            mode = child
+          else:
+            run_info.append(child)
+      if 'memory' in case.parallelRunInfo:
+        mode.append(xmlUtils.newNode('memory', text=case.parallelRunInfo.pop('memory')))
+      for sub in case.parallelRunInfo:
+        run_info.append(xmlUtils.newNode(sub, text=str(case.parallelRunInfo[sub])))
+      run_info.append(mode)
+    if case.innerParallel:
+      run_info.append(xmlUtils.newNode('NumMPI', text=case.innerParallel))
+
+  # TODO refactor to fit snippet style
+  # from PR #397
+  def _modify_outer_parallel(self, template, case):
+    """
+      Modifies the outer parallel stuff. This should only be called if
+      case.outerparallel > 0
+      @ In, template, xml.etree.ElementTree.Element, root of XML to modify
+      @ In, case, HERON Case, defining Case instance
+      @ Out, None
+
+    """
+    run_info = template.find('RunInfo')
+    # set outer batchsize and InternalParallel
+    batchSize = run_info.find('batchSize')
+    batchSize.text = f'{case.outerParallel}'
+    if self.parallel_xml is None:
+      run_info.append(xmlUtils.newNode('internalParallel', text='True'))
+    else:
+      #append all the children in the 'outer' element
+      for child in self.parallel_xml.find('outer'):
+        run_info.append(child)
+
   @property
   def job_name(self) -> str | None:
     """

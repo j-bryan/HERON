@@ -2,10 +2,11 @@
 
 # This script prepares for running commands from the coverage package
 
-SCRIPT_DIRNAME=`dirname $0`
-HERON_DIR=`(cd $SCRIPT_DIRNAME/..; pwd)`
-echo $HERON_DIR
-cd $HERON_DIR
+if [[ `pwd` != *"HERON" ]]
+then
+    echo "The initialize_coverage.sh script MUST be run from the HERON directory. Please try again."
+    exit
+fi
 RAVEN_DIR=`python -c 'from src._utils import get_raven_loc; print(get_raven_loc())'`
 source $RAVEN_DIR/scripts/establish_conda_env.sh --quiet --load
 RAVEN_LIBS_PATH=`conda env list | awk -v rln="$RAVEN_LIBS_NAME" '$0 ~ rln {print $NF}'`

@@ -1,4 +1,4 @@
-To build this, use the build module in python:
+To build this, use the build module in python from the build_cfg directory:
 
 
 python3 -m ensurepip
@@ -6,3 +6,17 @@ python3 -m pip install --upgrade build
 python3 -m build
 
 This will create packages in the dist directory.
+
+
+
+To build the data zip, from the HERON directory:
+
+#make sure that data and tests are clean
+git clean -x -f -d data/ tests/
+
+#build docs
+(cd doc && ./make_docs.sh)
+
+#create zip
+(cd .. && zip -r HERON_DATA.zip HERON/doc/pdfs/*.pdf HERON/data/ HERON/tests/)
+

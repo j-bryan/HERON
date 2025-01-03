@@ -8,6 +8,9 @@
 # python stuff
 __pycache__
 *.pyc
+build_cfg/dist/
+build_cfg/heron_ravenframework.egg-info/
+
 
 # install stuff
 /.ravenconfig.xml

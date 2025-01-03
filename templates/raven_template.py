@@ -6,6 +6,9 @@
   @author: Jacob Bryan (@j-bryan)
   @date: 2024-10-29
 """
+import os
+import re
+import glob
 from pathlib import Path
 import itertools as it
 import xml.etree.ElementTree as ET
@@ -223,6 +226,25 @@ class RavenTemplate(Template):
     run_info = self._template.find("RunInfo")  # type: RunInfo
     idx = index if index is not None else len(run_info.sequence)
     run_info.sequence.insert(idx, step)
+
+  # TODO refactor to fit snippet style
+  # from PR #397
+  def _get_parallel_xml(self, hostname):
+    """
+      Finds the xml file to go with the given hostname.
+      @ In, hostname, string with the hostname to search for
+      @ Out, xml, xml.eTree.ElementTree or None, if an xml file is found then use it, otherwise return None
+    """
+    # Should this allow loading from another directory (such as one
+    #  next to the input file?)
+    path = os.path.join(os.path.dirname(__file__),"parallel","*.xml")
+    filenames = glob.glob(path)
+    for filename in filenames:
+      cur_xml = ET.parse(filename).getroot()
+      regexp = cur_xml.attrib['hostregexp']
+      if re.match(regexp, hostname):
+        return cur_xml
+    return None
 
   # Steps
   def _load_file_to_object(self, source: Source, target: RavenSnippet) -> IOStep:

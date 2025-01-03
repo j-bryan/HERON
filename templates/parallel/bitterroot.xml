@@ -1,0 +1,11 @@
+<parallel hostregexp="bitterroot[12].*">
+  <useParallel>
+    <mode>slurm
+      <runSbatch />
+    </mode>
+  </useParallel>
+  <outer>
+    <parallelMethod>dask</parallelMethod>
+  </outer>
+</parallel>
+
