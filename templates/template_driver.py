@@ -49,9 +49,9 @@ class TemplateDriver(Base):
       self.template = DebugTemplate()
     elif has_static_history \
          and not has_synthetic_history \
-         and self._number_of_static_history_samples(case, sources) == 1 \
+         and mode == "sweep" \
          and not self._has_uncertain_econ_params(components) \
-         and mode == "sweep":
+         and self._number_of_static_history_samples(case, sources) == 1:
       # Fixed history workflow: only run the dispatch optimization once per capacity configuration.
       # This is quite a restrictive case due to some limitations in how sampling and post-processing is done in
       # RAVEN.
@@ -62,7 +62,7 @@ class TemplateDriver(Base):
       # This catches a large number of cases that are not easily done in a flat workflow in RAVEN:
       #   - Multiple histories and capacity configurations (PostProcessor won't calculate statistics for each capacity)
       #   - Any opt mode case (can't specify both a sampler and an optimizer in a MultiRun step)
-      #   -
+      #   - Any case with uncertain economic parameters
       self.template = BilevelTemplate(mode, has_static_history, has_synthetic_history)
 
     # TODO: A case where all capacities are fixed could also be make to be a flat workflow. There is no demand for this
@@ -80,9 +80,9 @@ class TemplateDriver(Base):
     @ In, sources, list[Source], case sources
     @ Out, None
     """
-    print('========================')
-    print('HERON: writing files ...')
-    print('========================')
+    print("========================")
+    print("HERON: writing files ...")
+    print("========================")
     self.template.writeWorkflow(loc)
 
     # Write library of info so it can be read in dispatch during inner run. Doing this here ensures that the lib file
