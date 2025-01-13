@@ -28,7 +28,10 @@ class RunInfo(RavenSnippet):
     @ Out, None
     """
     # Get special pre-sets for known computing environments
-    hostname = socket.gethostbyaddr(socket.gethostname())[0]
+    try:
+      hostname = socket.gethostbyaddr(socket.gethostname())[0]
+    except socket.gaierror:
+      hostname = "unknown"
     parallel_xml = get_parallel_xml(hostname)
     for child in parallel_xml.find("useParallel"):
       self.append(child)

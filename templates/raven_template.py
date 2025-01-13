@@ -840,7 +840,11 @@ class RavenTemplate(Template):
       file = self._template.find(f"Files/Input[@name='{function.name}']")
       if file is None:  # Add function to <Files> if not found there
         file = File(function.name)
-        file.path = str(".." / Path(function._source))
+        path = Path(function._source)
+        if not str(path).startswith("%"):  # magic variable name that will get resolved later are like %VARNAME%/some/path
+          path = ".." / path
+        file.path = path
+        # file.path = Path(function._source)
         self._add_snippet(file)
       files.append(file)
     return files
