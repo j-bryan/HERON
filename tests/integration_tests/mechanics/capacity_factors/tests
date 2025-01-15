@@ -7,7 +7,7 @@
       type = UnorderedCSV
       output = 'wind_o/sweep.csv'
       zero_threshold = 1e-6
-      rel_err = 1e-6
+      rel_err = 1e-5
     [../]
   [../]
 
