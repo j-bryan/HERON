@@ -47,3 +47,9 @@ jobs:
       - run: cd ../raven; bash ./build_raven
       - run: bash ../raven/run_tests --library-report
       - run: bash ../raven/run_tests -j4 --plugins --re=HERON/tests
+      - name: Archive CapacityFactor test files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacity_factor_test_results
+          path: tests/integration_tests/mechanics/capacity_factors
