@@ -33,6 +33,21 @@ class RunInfo(RavenSnippet):
     except socket.gaierror:
       hostname = "unknown"
     parallel_xml = get_parallel_xml(hostname)
+    self._apply_parallel_xml(parallel_xml)
+
+    # Handle "memory" setting first since its parent node is the "mode" node
+    if memory_val := parallel_run_info.pop("memory", None):
+      find_node(self, "mode/memory").text = memory_val
+    # All other settings get tacked onto the main RunInfo block
+    for tag, value in parallel_run_info.items():
+      find_node(self, tag).text = value
+
+  def _apply_parallel_xml(self, parallel_xml: ET.Element) -> None:
+    """
+    Apply the parallel processing settings in parallel_xml to the snippet XML tree
+    @ In, parallel_xml, ET.Element, the XML tree with parallel settings
+    @ Out, None
+    """
     for child in parallel_xml.find("useParallel"):
       self.append(child)
 
@@ -43,13 +58,6 @@ class RunInfo(RavenSnippet):
     else:
       for child in outer_node:
         self.append(child)
-
-    # Handle "memory" setting first since its parent node is the "mode" node
-    if memory_val := parallel_run_info.pop("memory", None):
-      find_node(self, "mode/memory").text = memory_val
-    # All other settings get tacked onto the main RunInfo block
-    for tag, value in parallel_run_info.items():
-      find_node(self, tag).text = value
 
   @property
   def job_name(self) -> str | None:
@@ -196,10 +204,12 @@ def get_parallel_xml(hostname: str) -> ET.Element:
   @ Out, xml, xml.eTree.ElementTree, if an xml file is found then use it, otherwise return the default settings
   """
   # Should this allow loading from another directory (such as one next to the input file?)
-  path = Path(__file__).parent / "parallel"
+  path = Path(__file__).parent.parent / "parallel"
   for filename in path.glob("*.xml"):
     cur_xml = ET.parse(filename).getroot()
     regexp = cur_xml.attrib["hostregexp"]
+    print(f"Checking {filename} regexp {regexp} for hostname {hostname}")
     if re.match(regexp, hostname):
+      print("Success!")
       return cur_xml
   return get_default_parallel_settings()

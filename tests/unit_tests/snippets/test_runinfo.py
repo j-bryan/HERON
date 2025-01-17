@@ -6,6 +6,7 @@ HERON_LOC = os.path.abspath(os.path.join(os.path.dirname(__file__), *[os.pardir]
 sys.path.append(HERON_LOC)
 
 from HERON.templates.snippets import RunInfo
+from HERON.templates.snippets.runinfo import get_default_parallel_settings, get_parallel_xml
 from HERON.templates.snippets import IOStep
 sys.path.pop()
 
@@ -14,6 +15,8 @@ import xml.etree.ElementTree as ET
 
 
 class TestRunInfo(unittest.TestCase):
+  """ Tests for the RunInfo RavenSnippet class """
+
   def setUp(self):
     self.run_info = RunInfo()
 
@@ -121,3 +124,36 @@ class TestRunInfo(unittest.TestCase):
       node = self.run_info.find(k)
       self.assertIsNotNone(node)
       self.assertEqual(node.text, v)
+
+  def test_apply_parallel_xml(self):
+    # Get the parallel XML settings to apply. We'll use the bitterroot settings to test.
+    hostname = "bitterroot1.ib"
+    xml = get_parallel_xml(hostname)
+    self.run_info._apply_parallel_xml(xml)
+
+    # Check if nodes have been inserted properly
+    for gold in xml.find("useParallel"):
+      test = self.run_info.find(gold.tag)
+      self.assertEqual(ET.tostring(test), ET.tostring(gold))
+
+    for gold in xml.find("outer"):
+      test = self.run_info.find(gold.tag)
+      self.assertEqual(ET.tostring(test), ET.tostring(gold))
+
+
+class TestUtilities(unittest.TestCase):
+  """ Tests for utility functions used by the RunInfo class """
+
+  def test_get_default_parallel_settings(self):
+    defaults = get_default_parallel_settings()
+    gold = ET.fromstring("<parallel><useParallel><mode>mpi<runQSUB/></mode></useParallel></parallel>")
+    self.assertEqual(ET.tostring(defaults), ET.tostring(gold))
+
+  def test_get_parallel_xml(self):
+    for cluster_name in ["sawtooth", "bitterroot"]:
+      gold_xml_path = os.path.join(HERON_LOC, "HERON", "templates", "parallel", f"{cluster_name}.xml")
+      gold = ET.tostring(ET.parse(gold_xml_path).getroot())
+      for num in range(1, 3):
+        hostname = f"{cluster_name}{num}.ib"
+        xml = get_parallel_xml(hostname)
+        self.assertEqual(ET.tostring(xml), gold)
