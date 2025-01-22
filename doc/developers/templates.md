@@ -29,7 +29,7 @@ Some cases which mathematically could be flat workflows cannot currently be impl
 
 ## Should I make a new template?
 The templating system is designed to make creating new templates a somewhat easy task.
-However, a balance must be struct between configuring existing templates and creating new templates.
+However, a balance must be struck between configuring existing templates and creating new templates.
 When is it appropriate to make a new template?
 
 Don't make a new template if...

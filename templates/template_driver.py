@@ -19,13 +19,13 @@ from .debug_template import DebugTemplate
 
 class TemplateDriver(Base):
   """ Selects the best template to use for the given case, populate the workflow, and write it to file """
-  def __init__(self) -> None:
+  def __init__(self, **kwargs) -> None:
     """
     Constructor
-    @ In, None
+    @ In, kwargs, dict, keyword arguments to pass to Base.__init__
     @ Out, None
     """
-    super().__init__()
+    super().__init__(**kwargs)
     self.template: RavenTemplate = None
 
   ##############
@@ -41,6 +41,11 @@ class TemplateDriver(Base):
     """
     has_static_history = any(s.is_type("CSV") for s in sources)
     has_synthetic_history = any(s.is_type("ARMA") for s in sources)
+    if has_static_history and has_synthetic_history:
+      raise self.raiseAnError(ValueError, "Mixing ARMA and CSV sources is not yet supported! "
+                              f"ARMA sources: {[s.name for s in sources if s.is_type('ARMA')]}; "
+                              f"CSV sources: {[s.name for s in sources if s.is_type('CSV')]}")
+
     mode = case.get_mode()
 
     if case.debug["enabled"]:
@@ -133,4 +138,3 @@ class TemplateDriver(Base):
         filter(lambda x: x.type == "CSV", sources)
       ),
     )
-

@@ -54,9 +54,9 @@ class DebugTemplate(RavenTemplate):
 
     # Then, figure out how things will be sampled for the debug run.
     # We need to handle 3 separate sampler configurations:
-    #   1. MonteCarlo sampler: Used for samplingfrom .ime series ROM and distributions for swept/optimized
+    #   1. MonteCarlo sampler: Used for sampling from time series ROM and distributions for swept/optimized
     #      capacities without a debug value and uncertain cashflow parameters.
-    #   2. CustomSampler sampler: Used for getting a static historyfrom . CSV file.
+    #   2. CustomSampler sampler: Used for getting a static history from a CSV file.
     #   3. EnsembleForward sampler: Used for combining the two where needed.
     # If there is a MonteCarlo sampler being used, we'll add any constants (like capacities with debug values)
     # there. Otherwise, if only a CustomSampler is used, we'll add them to the CustomSampler.
@@ -83,11 +83,11 @@ class DebugTemplate(RavenTemplate):
       monte_carlo.init_limit = case.get_num_samples()
 
       # Set up case to use synthetic history ROM
-      if any(s.is_type("ARMA") for s in sources):
+      if has_arma_source:
         self._use_time_series_rom(monte_carlo, case, sources)
 
       # Add capacities to sampler
-      for sampled_var, vals in cap_vars.items():
+      for sampled_var in cap_vars:
         monte_carlo.add_variable(sampled_var)
       for var_name, val in cap_consts.items():
         monte_carlo.add_constant(var_name, val)

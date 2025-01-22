@@ -734,7 +734,7 @@ class DispatchRunner:
       raise RuntimeError('No ARMA or CSV found in sources! Temporal mapping is missing.')
 
     # TODO check consistency between ROMs?
-    # for now, just `summariz`e what we found -> take it from the first source
+    # for now, just summarize what we found -> take it from the first source
     summary_info = next(iter(all_structure['details'].values()))
     interpolated = (summary_info['macro']['first'], summary_info['macro']['last'] + 1) if 'macro' in summary_info else (0, 1)
     # further, also take cluster structure from the first year only

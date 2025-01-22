@@ -1376,10 +1376,10 @@ class Case(Base):
       @ Out, template_class, TemplateDriver, instantiated TemplateDriver class
     """
     src_dir = os.path.dirname(os.path.realpath(__file__))
-    heron_dir = os.path.abspath(os.path.join(src_dir, '..'))
+    heron_dir = os.path.abspath(os.path.join(src_dir, ".."))
     # import template module
     sys.path.append(heron_dir)
-    module = importlib.import_module(f'templates.template_driver', package="HERON")
+    module = importlib.import_module("templates.template_driver", package="HERON")
     # load template, perform actions
-    driver = module.TemplateDriver()
+    driver = module.TemplateDriver(messageHandler=self.messageHandler)
     return driver
