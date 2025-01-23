@@ -118,13 +118,14 @@ class SnippetFactory:
     return key
 
 
-# There are many allowable distributions, each of which have their own properties. Rather than manually create classes for those,
-# we can read from the RAVEN distributions input specs and dynamically create RavenSnippet classes for those distributions.
+# There are many allowable distributions, each of which have their own properties. Rather than manually create classes
+# for those, we can read from the RAVEN distributions input specs and dynamically create RavenSnippet classes for those
+# distributions.
 
 dist_collection = returnInputParameter()
 for sub in dist_collection.subs:
-  # We create a new distribution class for every RAVEN distribution class in the RAVEN input spec, then register that new class
-  # with the templates.snippets.distributions module so they can be imported as expected.
+  # We create a new distribution class for every RAVEN distribution class in the RAVEN input spec, then register that
+  # new class with the templates.snippets.distributions module so they can be imported as expected.
   dist_class = distributions.distribution_class_from_spec(sub)
   setattr(distributions, dist_class.tag, dist_class)
 

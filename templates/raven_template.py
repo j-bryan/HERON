@@ -171,7 +171,7 @@ class RavenTemplate(Template):
       return
 
     # Otherwise, figure out where to put the XML snippet. Either a string for a parent node (maybe doesn't exist yet)
-    # was provided, or the desired location is inferredfrom .he snippet "snippet_class" (e.g. Models, DataObjects, etc.).
+    # was provided, or the desired location is inferred from the snippet class (e.g. Models, DataObjects, etc.).
     if parent and isinstance(parent, str):
       parent_path = parent
     else:
@@ -201,7 +201,7 @@ class RavenTemplate(Template):
     self._template.set("verbosity", verbosity)
 
   # RunInfo
-  def _initialize_runinfo(self, case: HeronCase, case_name: str = "") -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
@@ -293,7 +293,7 @@ class RavenTemplate(Template):
     if source.eval_mode == 'clustered':
       ET.SubElement(rom, "clusterEvalMode").text = "clustered"
 
-    # Create an IOStep to load the ROMfrom .he file
+    # Create an IOStep to load the ROM from the file
     step = IOStep(f"read_{source.name}")
     step.append(file.to_assembler_node("Input"))
     step.append(rom.to_assembler_node("Output"))
@@ -348,9 +348,9 @@ class RavenTemplate(Template):
     """
     # Add statistics for economic metrics to variable group. Use all statistics.
     default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
-    # This gets the unique valuesfrom .efault_names and the case result statistics dict keys. Set operations
+    # This gets the unique values from default_names and the case result statistics dict keys. Set operations
     # look cleaner but result in a randomly ordered list. Having a consistent ordering of statistics is beneficial
-    #from . UX standpoint.
+    # from a UX standpoint.
     stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
     econ_metrics = case.get_econ_metrics(nametype="output")
     stats_var_names = get_result_stats(econ_metrics, stats_names, case)
@@ -392,7 +392,9 @@ class RavenTemplate(Template):
         resource_list = sorted(list(component.get_resources()))
         for resource in resource_list:
           # NOTE: Assumes the only activity metric we care about is total activity
-          default_stats_tot_activity = self.namingTemplates["tot_activity"].format(component=component.name, tracker=tracker, resource=resource)
+          default_stats_tot_activity = self.namingTemplates["tot_activity"].format(component=component.name,
+                                                                                   tracker=tracker,
+                                                                                   resource=resource)
           act_metrics.append(default_stats_tot_activity)
     return act_metrics
 
@@ -422,7 +424,7 @@ class RavenTemplate(Template):
     """
     dispatch_eval = self._template.find("DataObjects/DataSet[@name='dispatch_eval']")  # type: DataSet
 
-    # Gather any ARMA sourcesfrom .he list of sources
+    # Gather any ARMA sources from the list of sources
     arma_sources = [s for s in sources if s.is_type("ARMA")]
 
     # Add cluster index info to dispatch variable groups and data objects
@@ -434,7 +436,7 @@ class RavenTemplate(Template):
     # Add models, steps, and their requisite data objects and outstreams for each case source
     for source in arma_sources:
       # An ARMA source is a pickled ROM that needs to be loaded.
-      # Load the ROMfrom .ile
+      # Load the ROM from file
       source_file, pickled_rom, load_iostep = self._load_pickled_rom(source)
       self._add_snippet(source_file)
       self._add_snippet(pickled_rom)
@@ -473,7 +475,10 @@ class RavenTemplate(Template):
       # update variable group with ROM output variable names
       self._template.find("VariableGroups/Group[@name='GRO_dispatch_in_Time']").variables.extend(out_vars)
 
-  def _get_stats_for_econ_postprocessor(self, case: HeronCase, econ_vars: list[str], activity_vars: list[str]) -> list[tuple[Statistic, str]]:
+  def _get_stats_for_econ_postprocessor(self,
+                                        case: HeronCase,
+                                        econ_vars: list[str],
+                                        activity_vars: list[str]) -> list[tuple[Statistic, str]]:
     """
     Get pairs of Statistic objects and metric/variable names to which to apply that statistic
     @ In, case, HeronCase, the HERON case
@@ -482,10 +487,10 @@ class RavenTemplate(Template):
     @ Out, stats_to_add, list[tuple[Statistic, str]], statistics and the variables they act on
     """
     # Econ metrics with all statistics names
-    # NOTE: This logic is borrowedfrom .avenTemplate._get_statistical_results_vars, but it's more useful to have the names,
-    # prefixes, and variable name separate here, not as one big string. Otherwise, we have to try to break that string
-    # back up, which would be sensitive to metric and variable naming conventions. We duplicate a little of the logic but
-    # get something more robust in return.
+    # NOTE: This logic is borrowed from ravenTemplate._get_statistical_results_vars, but it's more useful to have the
+    # names, prefixes, and variable name separate here, not as one big string. Otherwise, we have to try to break that
+    # string back up, which would be sensitive to metric and variable naming conventions. We duplicate a little of the
+    # logic but get something more robust in return.
     default_names = self.DEFAULT_STATS_NAMES.get(case.get_mode(), [])
     stats_names = list(dict.fromkeys(default_names + list(case.get_result_statistics())))
     econ_stats = get_statistics(stats_names, case.stats_metrics_meta)
@@ -506,7 +511,7 @@ class RavenTemplate(Template):
         statistic = opt_settings["stats_metric"]["name"]
       except (KeyError, TypeError):
         statistic = "expectedValue"  # default to expectedValue
-      opt_stat, = get_statistics([statistic], case.stats_metrics_meta)
+      opt_stat = get_statistics([statistic], case.stats_metrics_meta)[0]
       target_var, _ = case.get_opt_metric()
       target_var_output_name = case.economic_metrics_meta[target_var]["output_name"]
       if (opt_stat, target_var_output_name) not in stats_to_add:
@@ -535,7 +540,8 @@ class RavenTemplate(Template):
 
     return sampled_var
 
-  def _get_uncertain_cashflow_params(self, components: list[Component]) -> tuple[list[SampledVariable], list[Distribution]]:
+  def _get_uncertain_cashflow_params(self,
+                                     components: list[Component]) -> tuple[list[SampledVariable], list[Distribution]]:
     """
     Create SampledVariable and Distribution snippets for all uncertain cashflow parameters.
     @ In, components, list[Component]
@@ -545,8 +551,8 @@ class RavenTemplate(Template):
     sampled_vars = []
     distributions = []
 
-    # For each component, cashflow, and cashflow equation parameter, find any which are uncertain, and create distribution
-    # and sampled variable objects.
+    # For each component, cashflow, and cashflow equation parameter, find any which are uncertain, and create
+    # distribution and sampled variable objects.
     for component in components:
       for cashflow in component.get_cashflows():
         for param_name, vp in cashflow.get_uncertain_params().items():
@@ -554,7 +560,7 @@ class RavenTemplate(Template):
           feat_name = self.namingTemplates["variable"].format(unit=unit_name, feature=param_name)
           dist_name = self.namingTemplates["distribution"].format(variable=feat_name)
 
-          # Reconstruct distribution XML nodefrom .aluedParam definition
+          # Reconstruct distribution XML node from valuedParam definition
           dist_node = vp._vp.get_distribution()  # type: ET.Element
           dist_node.set("name", dist_name)
           dist_snippet = snippet_factory.from_xml(dist_node)
@@ -568,7 +574,10 @@ class RavenTemplate(Template):
     return sampled_vars, distributions
 
   # Samplers
-  def _create_sampler_variables(self, case: HeronCase, components: list[Component]) -> tuple[dict[SampledVariable, list[float]], dict[str, ValuedParam]]:
+  def _create_sampler_variables(self,
+                                case: HeronCase,
+                                components: list[Component]) -> tuple[dict[SampledVariable, list[float]],
+                                                                      dict[str, ValuedParam]]:
     """
     Create the Distribution and SampledVariable objects and the list of constant capacities that need to
     be added to samplers and optimizers.
@@ -704,10 +713,10 @@ class RavenTemplate(Template):
 
     # Define grid sampler and build the variables and their distributions that it'll sample
     sampler = Grid("grid")
-    vars, consts = self._create_sampler_variables(case, components)
-    for sampled_var, vals in vars.items():
+    variables, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in variables.items():
       sampler.add_variable(sampled_var)
-      sampled_var.use_grid(construction="custom", type="value", values=sorted(vals))
+      sampled_var.use_grid(construction="custom", kind="value", values=sorted(vals))
     for var_name, val in consts.items():
       sampler.add_constant(var_name, val)
 
@@ -725,17 +734,17 @@ class RavenTemplate(Template):
 
     return sampler, results_data
 
-  def _create_ensemble_forward_sampler(self, samplers: list[Sampler], name: str = "ensemble_sampler") -> EnsembleForward:
-      """
-      Wraps a list of samplers in an EnsembleForward sampler
-      @ In, samplers, list[Sampler], the samplers to include in the ensemble
-      @ In, name, str, optional, the name of the ensemble sampler
-      @ Out, ensemble_sampler, EnsembleForward, the ensemble sampler
-      """
-      ensemble_sampler = EnsembleForward(name)
-      for sampler in samplers:
-        ensemble_sampler.append(sampler)
-      return ensemble_sampler
+  def _create_ensemble_forward_sampler(self, samplers: list[Sampler], name: str | None = None) -> EnsembleForward:
+    """
+    Wraps a list of samplers in an EnsembleForward sampler
+    @ In, samplers, list[Sampler], the samplers to include in the ensemble
+    @ In, name, str, optional, the name of the ensemble sampler
+    @ Out, ensemble_sampler, EnsembleForward, the ensemble sampler; default: "ensemble_sampler"
+    """
+    ensemble_sampler = EnsembleForward(name or "ensemble_sampler")
+    for sampler in samplers:
+      ensemble_sampler.append(sampler)
+    return ensemble_sampler
 
   # Optimizers
   def _create_bayesian_opt(self, case: HeronCase, components: list[Component]) -> BayesianOptimizer:
@@ -768,9 +777,9 @@ class RavenTemplate(Template):
       gpr.custom_kernel = custom_kernel
 
     # Create sampler variables and their respective distributions
-    vars, consts = self._create_sampler_variables(case, components)
-    for sampled_var, vals in vars.items():
-      sampled_var.use_grid(construction="equal", type="CDF", steps=4, values=[0, 1])
+    variables, consts = self._create_sampler_variables(case, components)
+    for sampled_var in variables:
+      sampled_var.use_grid(construction="equal", kind="CDF", steps=4, values=[0, 1])
       optimizer.add_variable(sampled_var)
       sampler.add_variable(sampled_var)
     for var_name, val in consts.items():
@@ -810,14 +819,14 @@ class RavenTemplate(Template):
     optimizer.denoises = case.get_num_samples()
 
     # Create sampler variables and their respective distributions
-    vars, consts = self._create_sampler_variables(case, components)
+    variables, consts = self._create_sampler_variables(case, components)
 
-    for sampled_var, vals in vars.items():
+    for sampled_var, vals in variables.items():
       # initial value
       min_val = min(vals)
       max_val = max(vals)
       delta = max_val - min_val
-      # start 5% awayfrom .ero
+      # start 5% away from zero
       initial = min_val + 0.05 * delta if max_val > 0 else max_val - 0.05 * delta
       sampled_var.initial = initial
       optimizer.add_variable(sampled_var)
@@ -841,7 +850,8 @@ class RavenTemplate(Template):
       if file is None:  # Add function to <Files> if not found there
         file = File(function.name)
         path = Path(function._source)
-        if not str(path).startswith("%"):  # magic variable name that will get resolved later are like %VARNAME%/some/path
+        # magic variable name that will get resolved later are like %VARNAME%/some/path
+        if not str(path).startswith("%"):
           path = ".." / path
         file.path = path
         # file.path = Path(function._source)

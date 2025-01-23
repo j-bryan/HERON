@@ -26,8 +26,8 @@ class VariableGroup(RavenSnippet):
     """
     vargroup = cls(node.get("name"))
     if node.text:
-      vars = [varname.strip() for varname in node.text.split(",")]
-      vargroup.variables = vars
+      var_names = [varname.strip() for varname in node.text.split(",")]
+      vargroup.variables = var_names
     return vargroup
 
   @listproperty

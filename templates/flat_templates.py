@@ -12,6 +12,7 @@ from .heron_types import HeronCase, Component, Source
 from .raven_template import RavenTemplate
 
 from .snippets.dataobjects import PointSet
+from .snippets.runinfo import RunInfo
 from .snippets.samplers import CustomSampler, EnsembleForward, Grid
 from .snippets.steps import MultiRun
 from .snippets.variablegroups import VariableGroup
@@ -21,8 +22,8 @@ from .naming_utils import get_capacity_vars
 
 class FlatMultiConfigTemplate(RavenTemplate):
   """
-  A template for RAVEN workflows which do not consider uncertainty from sources which affect the system dispatch (one time
-  history, no uncertain variable costs for dispatchable components). Many system configurations may be considered.
+  A template for RAVEN workflows which do not consider uncertainty from sources which affect the system dispatch (one
+  time history, no uncertain variable costs for dispatchable components). Many system configurations may be considered.
   """
   template_path = Path("xml/flat_multi_config.xml")
   write_name = Path("outer.xml")
@@ -61,10 +62,10 @@ class FlatMultiConfigTemplate(RavenTemplate):
     grid_sampler = self._template.find("Samplers/EnsembleForward/Grid")  # type: Grid
     grid_results = self._template.find("DataObjects/PointSet[@name='grid']")  # type: PointSet
 
-    vars, consts = self._create_sampler_variables(case, components)
-    for sampled_var, vals in vars.items():
+    variables, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in variables.items():
       grid_sampler.add_variable(sampled_var)
-      sampled_var.use_grid(construction="custom", type="value", values=sorted(vals))
+      sampled_var.use_grid(construction="custom", kind="value", values=sorted(vals))
 
     ensemble_sampler = self._template.find("Samplers/EnsembleForward")  # type: EnsembleForward
     for var_name, val in consts.items():
@@ -96,13 +97,14 @@ class FlatMultiConfigTemplate(RavenTemplate):
       run_info.batch_size = case.outerParallel
       run_info.internal_parallel = True
 
-  def _initialize_runinfo(self, case: HeronCase) -> None:
+  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
-    @ Out, None
+    @ In, case_name, str, optional, the case name to use
+    @ Out, run_info, RunInfo, the RunInfo block
     """
-    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="o")
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel
@@ -113,3 +115,5 @@ class FlatMultiConfigTemplate(RavenTemplate):
       # Fills in parallel settings for template RunInfo from case. Also appliespre-sets for known
       # hostnames (e.g. sawtooth, bitterroot), as specified in the HERON/templates/parallel/*.xml files.
       run_info.set_parallel_run_settings(case.parallelRunInfo)
+
+    return run_info

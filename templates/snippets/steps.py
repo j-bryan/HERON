@@ -34,9 +34,10 @@ class Step(RavenSnippet):
     @ Out, None
     """
     if tag not in self._allowed_subs:
-      raise ValueError(f"Step type {self.tag} does not accept subelements with tag {tag}. Allowed: {self._allowed_subs}.")
+      raise ValueError(f"Step type {self.tag} does not accept subelements with tag {tag}. "
+                       f"Allowed: {self._allowed_subs}.")
 
-    # Create an Assembler nodefrom .he entity
+    # Create an Assembler node from the entity
     # NOTE: The entity snippet must have defined "class" and "name" attributes
     node = entity.to_assembler_node(tag)
 

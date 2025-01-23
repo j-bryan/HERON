@@ -20,20 +20,20 @@ class Distribution(RavenSnippet):
 
 
 def camel_to_snake(camel: str) -> str:
-    """
-    Converts camelCase to snake_case, handling grouped capital letters
-    @ In, camel, str, a camel case string
-    @ Out, snake, str, a snake case string
-    """
-    snake = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", camel)  # Handle grouped capitals
-    snake = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", snake)  # Handle single capitals
-    snake = snake.lower()
-    return snake
+  """
+  Converts camelCase to snake_case, handling grouped capital letters
+  @ In, camel, str, a camel case string
+  @ Out, snake, str, a snake case string
+  """
+  snake = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", camel)  # Handle grouped capitals
+  snake = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", snake)  # Handle single capitals
+  snake = snake.lower()
+  return snake
 
 
 def distribution_class_from_spec(spec) -> type[Distribution]:
   """
-  Make a new distribution classfrom .he RAVEN input spec for that class
+  Make a new distribution class from the RAVEN input spec for that class
   @ In, spec, RAVEN input spec
   @ Out, distribution, NewDistribution, the new distribution class
   """

@@ -44,7 +44,7 @@ class File(RavenSnippet):
     @ In, value, str, the type value to set
     @ Out, None
     """
-    self.set("type", str(value))
+    self.set("type", value)
 
   @property
   def path(self) -> str | None:
@@ -62,4 +62,4 @@ class File(RavenSnippet):
     @ In, value, str, the file path to set
     @ Out, None
     """
-    self.text = str(value)
+    self.text = value

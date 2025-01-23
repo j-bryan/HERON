@@ -18,7 +18,7 @@ from .heron_types import HeronCase, Component
 class Statistic:
   """
   A dataclass for building statistic names and ET.Elements. Hopefully this helps cut down repeated parsing of variable
-  names and statistis meta infofrom .ase.
+  names and statistis meta info from case.
   """
   name: str
   prefix: str
@@ -94,23 +94,23 @@ def get_capacity_vars(components: list[Component], name_template, *, debug=False
   @ In, name_template, str, naming template for dispatch variable name, expecting
                             keywords "component", "tracker", and "resource"
   @ In, debug, bool, optional, keyword-only argument for whether or not to use the debug value of a capacity variable
-  @ Out, vars, dict[str, Any], variable name-value pairs
+  @ Out, variables, dict[str, Any], variable name-value pairs
   """
-  vars = {}
+  variables = {}
 
   for component in components:
     name = component.name
     # treat capacity
     ## we just need to make sure everything we need gets into the dispatch ensemble model.
     ## For each interaction of each component, that means making sure the Function, ARMA, or constant makes it.
-    ## Constantsfrom .uter (namely sweep/opt capacities) are set in the MC Samplerfrom .he outer
-    ## The Dispatch needs infofrom .he Outer to know which capacity to use, so we can't pass itfrom .ere.
+    ## Constants from outer (namely sweep/opt capacities) are set in the MC Sampler from the outer
+    ## The Dispatch needs info from the Outer to know which capacity to use, so we can't pass it from here.
     capacity = component.get_capacity(None, raw=True)
 
     if capacity.is_parametric():
       cap_name = name_template.format(unit=name, feature='capacity')
       values = capacity.get_value(debug=debug)
-      vars[cap_name] = values
+      variables[cap_name] = values
     elif capacity.type in ['StaticHistory', 'SyntheticHistory', 'Function', 'Variable']:
       # capacity is limited by a signal, so it has to be handled in the dispatch; don't include it here.
       # OR capacity is limited by a function, and we also can't handle it here, but in the dispatch.
@@ -118,7 +118,7 @@ def get_capacity_vars(components: list[Component], name_template, *, debug=False
     else:
       raise NotImplementedError
 
-  return vars
+  return variables
 
 def get_component_activity_vars(components: list[Component], name_template: str) -> list[str]:
   """
@@ -126,9 +126,9 @@ def get_component_activity_vars(components: list[Component], name_template: str)
   @ In, components, list[Component], list of HERON components
   @ In, name_template, str, naming template for dispatch variable name, expecting
                             keywords "component", "tracker", and "resource"
-  @ Out, vars, list[str], list of variable names
+  @ Out, variables, list[str], list of variable names
   """
-  vars = []
+  variables = []
 
   for component in components:
     name = component.name
@@ -136,9 +136,9 @@ def get_component_activity_vars(components: list[Component], name_template: str)
       resource_list = sorted(list(component.get_resources()))
       for resource in resource_list:
         var_name = name_template.format(component=name, tracker=tracker, resource=resource)
-        vars.append(var_name)
+        variables.append(var_name)
 
-  return vars
+  return variables
 
 def get_opt_objective(case: HeronCase) -> str:
   """

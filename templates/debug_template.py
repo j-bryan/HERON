@@ -105,7 +105,7 @@ class DebugTemplate(RavenTemplate):
     else:
       monte_carlo = None
 
-    # The CustomSampler is only needed if there is a static historyfrom .SV
+    # The CustomSampler is only needed if there is a static history from CSV
     if has_csv_source:
       custom_sampler = CustomSampler("static_hist_sampler")
       self._configure_static_history_sampler(custom_sampler, case, sources)
@@ -140,14 +140,14 @@ class DebugTemplate(RavenTemplate):
     for func in self._get_function_files(sources):
       multirun.add_input(func)
 
-  def _initialize_runinfo(self, case: HeronCase) -> None:
+  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
     @ In, case_name, str, optional, the case name
     @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
-    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="o")
     run_info = super()._initialize_runinfo(case, case_name)
 
     # Use the outer parallel settings for flat run modes
@@ -155,24 +155,26 @@ class DebugTemplate(RavenTemplate):
     run_info.use_internal_parallel = batch_size > 1
 
     if case.useParallel:
-      # Fills in parallel settings for template RunInfo from case. Also appliespre-sets for known
+      # Fills in parallel settings for template RunInfo from case. Also applies pre-sets for known
       # hostnames (e.g. sawtooth, bitterroot), as specified in the HERON/templates/parallel/*.xml files.
       run_info.set_parallel_run_settings(case.parallelRunInfo)
 
+    return run_info
+
   def _use_time_series_rom(self, sampler: MonteCarlo, case: HeronCase, sources: list[Source]) -> None:
     """
-    Sets the workflow up to sample a time historyfrom . PickledROM model
+    Sets the workflow up to sample a time history from a PickledROM model
     @ In sampler, MonteCarlo, a MonteCarlo sampler snippet
     @ In, case, HeronCase, the HERON case
     @ In, sources, list[Source], external models, data, and functions
     @ Out, None
     """
-    # If a time series PickledROM is being used, it will need to be combined witht he HERON.DispatchManager external
+    # If a time series PickledROM is being used, it will need to be combined with the HERON.DispatchManager external
     # model with an EnsembleModel.
     ensemble = EnsembleModel("sample_and_dispatch")
     self._add_snippet(ensemble)
 
-    # Load the time series ROM(s)from .ile and add to the ensemble model.
+    # Load the time series ROM(s) from file and add to the ensemble model.
     # Includes steps to load and print metadata for the pickled time series ROMs
     self._add_time_series_roms(ensemble, case, sources)
 

@@ -30,10 +30,11 @@ class RavenCode(RavenSnippet):
 
   def add_alias(self, name: str, suffix: str | None = None, loc: str | None = None) -> None:
     """
-    Add an alias node to the model
+    Add an alias node to the model.
     @ In, name, str, the variable name to alias
     @ In, suffix, str, optional, a suffix to append to 'name'
     @ In, loc, str, optional, the location of the variable in the workflow
+                              default: Samplers|MonteCarlo@name:mc_arma_dispatch
     @ Out, None
     """
     varname = name if not suffix else f"{name}_{suffix}"
@@ -57,7 +58,8 @@ class RavenCode(RavenSnippet):
       remove_tag = "outputExportOutStreams"
       keep_tag = "outputDatabase"
     else:
-      raise ValueError(f"Model output export destination must be a CSV <Print> OutStream or a NetCDF Database. Received: {type(dest)}")
+      raise ValueError("Model output export destination must be a CSV <Print> OutStream or "
+                       f"a NetCDF Database. Received: {type(dest)}")
 
     if (remove_node := self.find(remove_tag)) is not None:
       self.remove(remove_node)

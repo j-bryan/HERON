@@ -149,8 +149,8 @@ class BayesianOptimizer(Optimizer):
       # FIXME: No acquisition function parameters are exposed to the HERON user
       acq_func = acq_funcs.get(acq_func_name, default_acq_func)()
       acquisition.append(acq_func)
-    except KeyError:
-      raise ValueError(f"Unrecognized acquisition function {acq_func_name}. Allowed: {acq_funcs.keys()}")
+    except KeyError as ke:
+      raise ValueError(f"Unrecognized acquisition function {acq_func_name}. Allowed: {acq_funcs.keys()}") from ke
 
     # random seed
     if "seed" in bo_settings:

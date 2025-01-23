@@ -52,7 +52,7 @@ class BilevelTemplate(RavenTemplate):
     """
     Load template files
     @ In, None
-    @ Out, NOne
+    @ Out, None
     """
     self.inner.loadTemplate()
     self.outer.loadTemplate()
@@ -126,20 +126,21 @@ class OuterTemplate(RavenTemplate):
   def set_inner_data_name(self, name: str, inner_to_outer: str) -> None:
     """
     Give the RAVEN code model the place to look for the inner's data
-    @ In, name, str, the name of the data object
+    @ In, name, str, the name of the data objectw
     @ In, inner_to_outer, str, the type of file used to pass the data ("csv" or "netcdf")
     @ Out, None
     """
     model = self._template.find("Models/Code[@subType='RAVEN']")  # type: RavenCode
     model.set_inner_data_handling(name, inner_to_outer)
 
-  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
+    @ In, case_name, str, optional, the case name
     @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
-    case_name = self.namingTemplates['jobname'].format(case=case.name, io='o')
+    case_name = case_name or self.namingTemplates['jobname'].format(case=case.name, io='o')
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel
@@ -295,10 +296,10 @@ class OuterTemplateSweep(OuterTemplate):
 
     # Populate the sampled and constant capacities in the Grid sampler
     sampler = self._template.find("Samplers/Grid")  # type: Grid
-    vars, consts = self._create_sampler_variables(case, components)
-    for sampled_var, vals in vars.items():
+    variables, consts = self._create_sampler_variables(case, components)
+    for sampled_var, vals in variables.items():
       sampler.add_variable(sampled_var)
-      sampled_var.use_grid(construction="custom", type="value", values=sorted(vals))
+      sampled_var.use_grid(construction="custom", kind="value", values=sorted(vals))
     for var_name, val in consts.items():
       sampler.add_constant(var_name, val)
 
@@ -350,7 +351,7 @@ class InnerTemplate(RavenTemplate):
     self._set_time_vars(case.get_time_name(), case.get_year_name())
 
     # Figure out econ metrics are being used for the case
-    #   - econ metrics (from case obj), total activity variables (assembledfrom .omponents list)
+    #   - econ metrics (from case obj), total activity variables (assembled from components list)
     #   - add to output groups GRO_dispatch_out, GRO_timeseries_out_scalar
     #   - add to metrics data object (arma_metrics PointSet)
     activity_vars = get_component_activity_vars(components, self.namingTemplates["tot_activity"])
@@ -410,10 +411,11 @@ class InnerTemplate(RavenTemplate):
     @ Out, disp_results_name, str, the name of the dispatch results object
     """
     if not self._dispatch_results_name:
-      raise ValueError("No dispatch results object name has been set! Perhaps the inner workflow hasn't been created yet?")
+      raise ValueError("No dispatch results object name has been set! Perhaps the inner workflow hasn't "
+                       "been created yet?")
     return self._dispatch_results_name
 
-  def _initialize_runinfo(self, case: HeronCase) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
@@ -421,7 +423,7 @@ class InnerTemplate(RavenTemplate):
     @ Out, run_info, RunInfo, a RunInfo object describing case run info
     """
     # Called by the RavenTemplate class, no need ot add to this class's createWorkflow method.
-    case_name = case_name = self.namingTemplates["jobname"].format(case=case.name, io="i")
+    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="i")
     run_info = super()._initialize_runinfo(case, case_name)
 
     # parallel settings
@@ -501,7 +503,7 @@ class InnerTemplate(RavenTemplate):
     capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
     capacities_vargroup.variables.extend(list(capacities_vars))
     for k, v in capacities_vars.items():
-      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacityfrom .uter in write_inner.py
+      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacity from outer in write_inner.py
       sampler.add_constant(k, val)
 
 
@@ -571,11 +573,11 @@ class InnerTemplateStaticHistory(InnerTemplate):
     capacities_vars = get_capacity_vars(components, self.namingTemplates["variable"])
     capacities_vargroup.variables.extend(list(capacities_vars))
     for k, v in capacities_vars.items():
-      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacityfrom .uter in write_inner.py
+      val = "" if isinstance(v, list) else v  # empty string is overwritten by capacity from outer in write_inner.py
       custom_sampler.add_constant(k, val)
 
     # See if there are any uncertain cashflow parameters. If so, we need to create a MonteCarlo sampler to sample
-    #from .hose distributions and tie the MonteCarlo and CustomSampler samplers together with an EnsembleForward
+    # from those distributions and tie the MonteCarlo and CustomSampler samplers together with an EnsembleForward
     # sampler.
     sampled_vars, distributions = self._get_uncertain_cashflow_params(components)
     if len(sampled_vars) > 0:

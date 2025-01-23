@@ -91,13 +91,13 @@ class Database(RavenSnippet):
   #####################
   # Getters & Setters #
   #####################
-  def add_variable(self, *vars: str) -> None:
+  def add_variable(self, *variables: str) -> None:
     """
     Add variables to the database
-    @ In, *vars, str, variable names
+    @ In, *variables, str, variable names
     @ Out, None
     """
-    self.variables.update(vars)
+    self.variables.update(variables)
 
 
 class NetCDF(Database):

@@ -59,9 +59,9 @@ class ListWrapper(list):
     del lst[index]
     self._set_list(lst)
 
-  def append(self, object):
+  def append(self, obj):
     lst = self._get_list()
-    lst.append(object)
+    lst.append(obj)
     self._set_list(lst)
 
   def extend(self, iterable):
@@ -69,9 +69,9 @@ class ListWrapper(list):
     lst.extend(iterable)
     self._set_list(lst)
 
-  def insert(self, index, object):
+  def insert(self, index, obj):
     lst = self._get_list()
-    lst.insert(index, object)
+    lst.insert(index, obj)
     self._set_list(lst)
 
   def remove(self, value):
@@ -158,10 +158,25 @@ class listproperty:
     self.fdel(obj)
 
   def getter(self, fget):
+    """
+    Set getter function for property
+    @ In, fget, Callable, getter function
+    @ Out, obj, self with set getter
+    """
     return type(self)(fget, self.fset, self.fdel, self.__doc__)
 
   def setter(self, fset):
+    """
+    Set setter function for property
+    @ In, fget, Callable, setter function
+    @ Out, obj, self with set setter
+    """
     return type(self)(self.fget, fset, self.fdel, self.__doc__)
 
   def deleter(self, fdel):
+    """
+    Set deleter function for property
+    @ In, fdel, Callable, deleter function
+    @ Out, obj, self with set deleter
+    """
     return type(self)(self.fget, self.fset, fdel, self.__doc__)

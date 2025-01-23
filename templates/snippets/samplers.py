@@ -18,16 +18,16 @@ class SampledVariable(RavenSnippet):
   """ A snippet class for sampled variables """
   tag = "variable"
 
-  def use_grid(self, type: str, construction: str, values: list[float], steps: int | None = None) -> None:
+  def use_grid(self, kind: str, construction: str, values: list[float], steps: int | None = None) -> None:
     """
     Use a grid of values to sample the variable
-    @ In, type, str, the type of sampling to do
+    @ In, kind, str, the type of sampling to do
     @ In, construction, str, how to construct the values to sample
     @ In, values, list[float], values used by the constructor
     @ In, steps, int, optional, the number of steps to make along the interval defined by 'values'
     @ Out, None
     """
-    attrib = {"type": type, "construction": construction}
+    attrib = {"type": kind, "construction": construction}
     if steps:
       attrib["steps"] = steps
     ET.SubElement(self, "grid", attrib).text = " ".join([str(v) for v in values])

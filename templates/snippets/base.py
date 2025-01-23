@@ -13,17 +13,18 @@ from ..xml_utils import merge_trees
 
 class RavenSnippet(ET.Element):
   """
-  RavenSnippet class objects describe one contiguous snippet of RAVEN XML, inheritingfrom .he xml.etree.ElementTree.Element
-  class. This base class contains methods for quickly building subtrees and set and access common RAVEN node attributes.
+  RavenSnippet class objects describe one contiguous snippet of RAVEN XML, inheriting from the
+  xml.etree.ElementTree.Element class. This base class contains methods for quickly building subtrees
+  and set and access common RAVEN node attributes.
   """
   tag = None  # XML tag associated with the snippet class
-  snippet_class = None  # class of Entity described by the snippet (e.g. Models, Optimizers, Samplers, DataObjects, etc.)
+  snippet_class = None  # class of Entity described by the snippet (e.g. Models, Optimizers, DataObjects, etc.)
   subtype = None  # subtype of the snippet entity, does not need to be defined for all snippets
 
   @classmethod
   def from_xml(cls, node: ET.Element, **kwargs) -> "RavenSnippet":
     """
-    Alternate constructor which instantiates a new RavenSnippet objectfrom .n existing XML node
+    Alternate constructor which instantiates a new RavenSnippet object from an existing XML node
     @ In, node, ET.Element, the template node
     @ In, kwargs, dict, keyword arguments
     @ Out, snippet, RavenSnippet, the new snippet
@@ -41,7 +42,7 @@ class RavenSnippet(ET.Element):
 
     return snippet
 
-  def __init__(self, name: str | None = None, subelements: dict[str, Any] = {}) -> None:
+  def __init__(self, name: str | None = None, subelements: dict[str, Any] | None = None) -> None:
     """
     Constructor
     @ In, name, str, optional, the name of the entity
@@ -51,14 +52,15 @@ class RavenSnippet(ET.Element):
     super().__init__(self.tag)
 
     # Update node attributes with provided values
-    # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and provide
-    # an easy interface to set the common attributes "name" and "subType".
+    # Arguments "name", "class_name", and "subtype_name" help to alias the problematic "class" attribute name and
+    # provide an easy interface to set the common attributes "name" and "subType".
     if name is not None:
       self.name = name
     if self.subtype is not None:
       self.attrib["subType"] = self.subtype
 
-    self.add_subelements(subelements)
+    if subelements:
+      self.add_subelements(subelements)
 
   def __repr__(self) -> str:
     """
@@ -107,7 +109,7 @@ class RavenSnippet(ET.Element):
     return node
 
   # Subtree building utilities
-  def add_subelements(self, subelements: dict[str, Any] = {}, **kwargs) -> None:
+  def add_subelements(self, subelements: dict[str, Any] | None = None, **kwargs) -> None:
     """
     Add subelements by either providing a dict or keyword arguments.
     @ In, subelements, dict[str, Any], optional, dict with new key-value settings pairs
@@ -115,7 +117,8 @@ class RavenSnippet(ET.Element):
     @ Out, None
     """
     parent = kwargs.pop("parent", self)
-    for tag, value in (subelements | kwargs).items():
+    all_subs = kwargs | (subelements if subelements else {})
+    for tag, value in all_subs.items():
       self._add_subelement(parent, tag, value)
 
   def _add_subelement(self, parent: ET.Element, tag: str, value: Any) -> None:
@@ -126,7 +129,7 @@ class RavenSnippet(ET.Element):
     @ In, tag, str, the tag of the child node
     @ In, value, Any, the value of the child node
     """
-    # If the value inheritsfrom .T.Element, we can append the value to the parent directly.
+    # If the value inherits from ET.Element, we can append the value to the parent directly.
     if isinstance(value, ET.Element):
       parent.append(value)
     # If the value happens to be another entity, it has its own to_xml method. Use that instead of manually
