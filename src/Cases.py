@@ -1355,18 +1355,18 @@ class Case(Base):
     return self._npv_target
 
   #### API ####
-  def write_workflows(self, components, sources, loc):
+  def write_workflows(self, components, sources, dest_dir):
     """
       Writes workflows for this case to XMLs on disk.
       @ In, components, HERON components, components for the simulation
       @ In, sources, HERON sources, sources for the simulation
-      @ In, loc, str, location in which to write files
+      @ In, dest_dir, str, directory in which to write files
       @ Out, None
     """
     # Load templates, create RAVEN workflows, and write those workflows using a TemplateDriver
     driver = self._make_template_driver()
     driver.create_workflow(self, components, sources)
-    driver.write_workflow(loc, self, components, sources)
+    driver.write_workflow(dest_dir, self, components, sources)
 
   #### UTILITIES ####
   def _make_template_driver(self):

@@ -6,7 +6,8 @@
   @author: Jacob Bryan (@j-bryan)
   @date: 2024-12-23
 """
-from pathlib import Path
+import os
+
 from .heron_types import HeronCase, Component, Source
 
 from .raven_template import RavenTemplate
@@ -25,8 +26,8 @@ class FlatMultiConfigTemplate(RavenTemplate):
   A template for RAVEN workflows which do not consider uncertainty from sources which affect the system dispatch (one
   time history, no uncertain variable costs for dispatchable components). Many system configurations may be considered.
   """
-  template_path = Path("xml/flat_multi_config.xml")
-  write_name = Path("outer.xml")
+  template_name = "flat_multi_config.xml"
+  write_name = "outer.xml"
 
   # With static histories, the stats that are used shouldn't require multiple samples. Therefore, we drop the
   # sigma and variance default stat names for the static history case here.
@@ -35,15 +36,20 @@ class FlatMultiConfigTemplate(RavenTemplate):
     "sweep": ["maximum", "minimum", "percentile", "samples"]
   }
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
-    Populate the XML template with case information
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], the case components
-    @ In, sources, list[Source], the case data sources
+    Create a workflow for the specified Case and its components and sources
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+    sources = kwargs["sources"]
+
+    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    self._set_case_name(case_name)
+    self._initialize_runinfo(case)
 
     # Set up some helpful variable groups
     capacities_vargroup = self._template.find("VariableGroups/Group[@name='GRO_capacities']")  # type: VariableGroup
@@ -71,9 +77,6 @@ class FlatMultiConfigTemplate(RavenTemplate):
     for var_name, val in consts.items():
       ensemble_sampler.add_constant(var_name, val)
 
-    # Number of "denoises" for the sampler is the number of samples it should take
-    grid_sampler.denoises = case.get_num_samples()
-
     # If there are any case labels, make a variable group for those and add it to the "grid" PointSet.
     # These labels also need to get added to the sampler as constants.
     labels = case.get_labels()
@@ -97,15 +100,13 @@ class FlatMultiConfigTemplate(RavenTemplate):
       run_info.batch_size = case.outerParallel
       run_info.internal_parallel = True
 
-  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase) -> None:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
-    @ In, case_name, str, optional, the case name to use
-    @ Out, run_info, RunInfo, the RunInfo block
+    @ Out, None
     """
-    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="o")
-    run_info = super()._initialize_runinfo(case, case_name)
+    run_info = self._template.find("RunInfo")  # type: RunInfo
 
     # parallel
     batch_size = min(case.outerParallel, 1) * min(case.innerParallel, 1)
@@ -115,5 +116,3 @@ class FlatMultiConfigTemplate(RavenTemplate):
       # Fills in parallel settings for template RunInfo from case. Also appliespre-sets for known
       # hostnames (e.g. sawtooth, bitterroot), as specified in the HERON/templates/parallel/*.xml files.
       run_info.set_parallel_run_settings(case.parallelRunInfo)
-
-    return run_info

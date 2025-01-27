@@ -42,9 +42,9 @@ class TemplateDriver(Base):
     has_static_history = any(s.is_type("CSV") for s in sources)
     has_synthetic_history = any(s.is_type("ARMA") for s in sources)
     if has_static_history and has_synthetic_history:
-      raise self.raiseAnError(ValueError, "Mixing ARMA and CSV sources is not yet supported! "
-                              f"ARMA sources: {[s.name for s in sources if s.is_type('ARMA')]}; "
-                              f"CSV sources: {[s.name for s in sources if s.is_type('CSV')]}")
+      self.raiseAnError(ValueError, "Mixing ARMA and CSV sources is not yet supported! "
+                        f"ARMA sources: {[s.name for s in sources if s.is_type('ARMA')]}; "
+                        f"CSV sources: {[s.name for s in sources if s.is_type('CSV')]}")
 
     mode = case.get_mode()
 
@@ -73,13 +73,13 @@ class TemplateDriver(Base):
     # TODO: A case where all capacities are fixed could also be make to be a flat workflow. There is no demand for this
     #       type of workflow right now (to my knowledge, as of 2024-12-20), so this hasn't yet been implemented.
 
-    self.template.loadTemplate()
-    self.template.createWorkflow(case, components, sources)
+    self.template.loadTemplate(self.template.template_name, "xml")
+    self.template.createWorkflow(case=case, components=components, sources=sources)
 
-  def write_workflow(self, loc: str, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def write_workflow(self, dest_dir: str, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
     """
     Write the workflow to file
-    @ In, loc, str, directory to write to
+    @ In, dest_dir, str, directory to write to
     @ In, case, HeronCase, the HERON case object
     @ In, components, list[Component], case components
     @ In, sources, list[Source], case sources
@@ -88,16 +88,15 @@ class TemplateDriver(Base):
     print("========================")
     print("HERON: writing files ...")
     print("========================")
-    self.template.writeWorkflow(loc)
+    dest = self.template.get_write_path(dest_dir)
+    self.template.writeWorkflow(self.template.template_xml, dest)
 
     # Write library of info so it can be read in dispatch during inner run. Doing this here ensures that the lib file
     # is written just once, no matter the number of workflow files written by the template.
-    if isinstance(loc, str):
-      loc = Path(loc)
-    lib_file = loc / self.template.namingTemplates["lib file"]
+    lib_file = Path(dest_dir) / self.template.namingTemplates["lib file"]
     with lib_file.open("wb") as lib:
       pk.dump((case, components, sources), lib)
-    print(f"Wrote '{lib_file.name}' to '{str(loc.resolve())}'")
+    print(f"Wrote '{lib_file.name}' to '{str(lib_file.resolve())}'")
 
   ###################
   # Utility methods #
@@ -109,7 +108,7 @@ class TemplateDriver(Base):
     @ In, components, list[Component], list of HERON case components
     @ Out, has_all_capacities_fixed, bool, if all components have fixed capacities
     """
-    return not any([comp.get_capacity(None, raw=True).is_parametric() for comp in components])
+    return not any(comp.get_capacity(None, raw=True).is_parametric() for comp in components)
 
   @staticmethod
   def _has_uncertain_econ_params(components: list[Component]) -> bool:

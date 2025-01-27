@@ -7,6 +7,7 @@
   @date: 2024-12-23
 """
 from pathlib import Path
+import xml.etree.ElementTree as ET
 import shutil
 
 from .imports import RAVEN_LOC
@@ -48,57 +49,96 @@ class BilevelTemplate(RavenTemplate):
     else:
       raise ValueError(f"Unsupported case mode '{mode}' in Bilevel workflow template.")
 
-  def loadTemplate(self) -> None:
+  @property
+  def template_name(self) -> dict[str, str]:
     """
-    Load template files
-    @ In, None
-    @ Out, None
+      Getter property for the template template_name attributes. Allows for compatibility with acces strategy for
+      template classes which use only one template file.
+      @ In, None
+      @ Out, dict[str, str], inner and outer template names
     """
-    self.inner.loadTemplate()
-    self.outer.loadTemplate()
+    return {"inner": self.inner.template_name, "outer": self.outer.template_name}
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  @property
+  def write_name(self) -> dict[str, str]:
+    """
+      Getter property for the template write_name attributes. Allows for compatibility with acces strategy for template
+      classes which use only one template file.
+      @ In, None
+      @ Out, dict[str, str], inner and outer template write names
+    """
+    return {"inner": self.inner.write_name, "outer": self.outer.write_name}
+
+  def loadTemplate(self, filename: dict[str, str], path: str) -> None:
+    """
+      Loads template file statefully.
+      @ In, filename, dict[str, str], dictionary of names of files to load (xml)
+      @ In, path, str, path to file relative to HERON/templates/
+      @ Out, None
+    """
+    self.inner.loadTemplate(filename["inner"], path)
+    self.outer.loadTemplate(filename["outer"], path)
+
+  def createWorkflow(self, **kwargs) -> dict[str, ET.Element]:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
-    @ Out, None
+    @ In, kwargs, dict, keyword arguments
+    @ Out, dict[str, ET.Element], modified template XML
     """
-    self.inner.createWorkflow(case, components, sources)
+    self.inner.createWorkflow(**kwargs)
 
     # set the path to the inner sampler so the outer knows where to send aliased variables
     self.outer.inner_sampler = self.inner.get_sampler_path()
-    self.outer.createWorkflow(case, components, sources)
+    self.outer.createWorkflow(**kwargs)
 
     # Coordinate across templates. The outer workflow needs to know where the inner workflow will save the dispatch
     # results to perform additional processing.
+    case = kwargs["case"]
     disp_results_name = self.inner.get_dispatch_results_name()
     self.outer.set_inner_data_name(disp_results_name, case.data_handling["inner_to_outer"])
 
-  def writeWorkflow(self, loc: str) -> None:
+    return {"inner": self.inner.template_xml, "outer": self.outer.template_xml}
+
+  def writeWorkflow(self, template: dict[str, ET.Element], destination: dict[str, str], run: bool = False) -> None:
     """
-    Write RAVEN workflow
-    @ In, loc, str, path to write workflows to
-    @ Out, None
+      Writes a template to file.
+      @ In, template, dict[str, ET.Element], XML trees to write
+      @ In, destination, dict[str, str], paths to write the templates to
+      @ In, run, bool, optional, if True then run the workflow after writing? good idea?
+      @ Out, errors, int, 0 if successfully wrote [and run] and nonzero if there was a problem
     """
-    self.outer.writeWorkflow(loc)
-    self.inner.writeWorkflow(loc)
+    for name, xml in template.items():
+      super().writeWorkflow(xml, destination[name], run)
 
     # copy "write_inner.py", which has the denoising and capacity fixing algorithms
     conv_filename = "write_inner.py"
     write_inner_dir = Path(__file__).parent
-    dest_dir = Path(loc)
-
+    dest_dir = Path(next(iter(destination.values()))).parent
     conv_src = write_inner_dir / conv_filename
     conv_file = dest_dir / conv_filename
     shutil.copyfile(str(conv_src), str(conv_file))
-    print(f"Wrote '{conv_filename}' to '{str(dest_dir.resolve())}'")
+    print(f"Wrote '{conv_filename}' to '{destination}'")
 
+  @property
+  def template_xml(self) -> dict[str, ET.Element]:
+    """
+      Getter property for the template XML ET.Element tree
+      @ In, None
+      @ Out, _templates, dict[str, ET.Element], the XML trees
+    """
+    return {"inner": self.inner.template_xml, "outer": self.outer.template_xml}
+
+  def get_write_path(self, dest_dir: str) -> dict[str, str]:
+    """
+      Get the path of to write the template to
+      @ In, dest_dir, str, the directory to write the file to
+      @ Out, paths, dict[str, str], the path (directory + file name) to write to for each template
+    """
+    return {"inner": self.inner.get_write_path(dest_dir), "outer": self.outer.get_write_path(dest_dir)}
 
 class OuterTemplate(RavenTemplate):
   """ Base class for modifying the outer workflow in bilevel workflows """
-  write_name = Path("outer.xml")
+  write_name = "outer.xml"
 
   def __init__(self) -> None:
     """
@@ -109,15 +149,21 @@ class OuterTemplate(RavenTemplate):
     super().__init__()
     self.inner_sampler = None
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+
+    case = kwargs["case"]
+    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    self._set_case_name(case_name)
+    self._initialize_runinfo(case)
+
+    components = kwargs["components"]
+
     # Configure the RAVEN model
     self._configure_raven_model(case, components)
     # Populate the capacities and outer_results variable groups
@@ -133,15 +179,13 @@ class OuterTemplate(RavenTemplate):
     model = self._template.find("Models/Code[@subType='RAVEN']")  # type: RavenCode
     model.set_inner_data_handling(name, inner_to_outer)
 
-  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase) -> None:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
-    @ In, case_name, str, optional, the case name
-    @ Out, run_info, RunInfo, a RunInfo object describing case run info
+    @ Out, None
     """
-    case_name = case_name or self.namingTemplates['jobname'].format(case=case.name, io='o')
-    run_info = super()._initialize_runinfo(case, case_name)
+    run_info = self._template.find("RunInfo")  # type: RunInfo
 
     # parallel
     if case.outerParallel > 0:
@@ -158,8 +202,6 @@ class OuterTemplate(RavenTemplate):
 
     if case.innerParallel:
       run_info.num_mpi = case.innerParallel
-
-    return run_info
 
   def _configure_raven_model(self, case: HeronCase, components: list[Component]) -> RavenCode:
     """
@@ -228,17 +270,18 @@ class OuterTemplate(RavenTemplate):
 
 class OuterTemplateOpt(OuterTemplate):
   """ Sets up the outer workflow for optimization mode """
-  template_path = Path("xml/outer_opt.xml")
+  template_name = "outer_opt.xml"
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+    sources = kwargs["sources"]
 
     # Define XML blocks for optimization: optimizer, sampler, ROM, etc.
     opt_strategy = case.get_opt_strategy()
@@ -282,17 +325,17 @@ class OuterTemplateOpt(OuterTemplate):
 
 class OuterTemplateSweep(OuterTemplate):
   """ Sets up the outer workflow for sweep mode """
-  template_path = Path("xml/outer_sweep.xml")
+  template_name = "outer_sweep.xml"
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
 
     # Populate the sampled and constant capacities in the Grid sampler
     sampler = self._template.find("Samplers/Grid")  # type: Grid
@@ -325,7 +368,7 @@ class OuterTemplateSweep(OuterTemplate):
 
 class InnerTemplate(RavenTemplate):
   """ Template for the inner workflow of a bilevel problem """
-  write_name = Path("inner.xml")
+  write_name = "inner.xml"
 
   def __init__(self) -> None:
     """
@@ -337,15 +380,19 @@ class InnerTemplate(RavenTemplate):
     self._dispatch_results_name = ""  # str, keeps track of the name of the Database or OutStream used pass dispatch
                                       #      data to the outer workflow
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+
+    case_name = self.namingTemplates["jobname"].format(case=case.name, io="i")
+    self._set_case_name(case_name)
+    self._initialize_runinfo(case)
 
     # Set the index variable names for the time index names
     self._set_time_vars(case.get_time_name(), case.get_year_name())
@@ -415,16 +462,13 @@ class InnerTemplate(RavenTemplate):
                        "been created yet?")
     return self._dispatch_results_name
 
-  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase) -> None:
     """
     Initializes the RunInfo node of the workflow
     @ In, case, Case, the HERON Case object
-    @ In, case_name, str, optional, the case name
-    @ Out, run_info, RunInfo, a RunInfo object describing case run info
+    @ Out, None
     """
-    # Called by the RavenTemplate class, no need ot add to this class's createWorkflow method.
-    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="i")
-    run_info = super()._initialize_runinfo(case, case_name)
+    run_info = self._template.find("RunInfo")
 
     # parallel settings
     if case.innerParallel > 0:
@@ -432,8 +476,6 @@ class InnerTemplate(RavenTemplate):
       run_info.batch_size = case.innerParallel
     else:
       run_info.batch_size = 1
-
-    return run_info
 
   def _add_case_labels_to_sampler(self, case_labels: dict[str, str], sampler: Sampler) -> None:
     """
@@ -509,17 +551,18 @@ class InnerTemplate(RavenTemplate):
 
 class InnerTemplateSyntheticHistory(InnerTemplate):
   """ Template for the inner workflow of a bilevel problem that uses a static history source """
-  template_path = Path("xml/inner_synth.xml")
+  template_name = "inner_synth.xml"
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+    sources = kwargs["sources"]
 
     # Add ARMA ROMs to ensemble model
     ensemble_model = self._template.find("Models/EnsembleModel")
@@ -547,17 +590,18 @@ class InnerTemplateSyntheticHistory(InnerTemplate):
 
 class InnerTemplateStaticHistory(InnerTemplate):
   """ Template for the inner workflow of a bilevel problem """
-  template_path = Path("xml/inner_static.xml")
+  template_name = "inner_static.xml"
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+    sources = kwargs["sources"]
 
     # Create the custom sampler used to provide static history data to the model
     custom_sampler = CustomSampler("static_history_sampler")

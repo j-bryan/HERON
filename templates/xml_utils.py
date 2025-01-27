@@ -86,13 +86,12 @@ def _to_string(val: Any, delimiter: str = ", ") -> str:
   """
   if isinstance(val, str):
     return val
-  elif isinstance(val, dict):
+  if isinstance(val, dict):
     raise TypeError(f"Unable to convert dicts to node text. Received type '{type(val)}'.")
-  elif hasattr(val, "__iter__") and not isinstance(val, str):  # lists, ListWrapper, sets, numpy arrays, etc.
+  if hasattr(val, "__iter__") and not isinstance(val, str):  # lists, ListWrapper, sets, numpy arrays, etc.
     # return as comma-separated string
     return delimiter.join([str(v) for v in val])
-  else:  # numeric types and other objects, including RavenSnippet objects
-    return str(val)
+  return str(val)
 
 def find_node(parent: ET.Element, tag: str, make_if_missing: bool = True) -> ET.Element | None:
   """

@@ -48,8 +48,12 @@ def modifyInput(root: ET.Element, mod_dict: dict[str, Any]) -> ET.Element:
   @ In, mod_dict, dict[str, Any], modifications to make to the workflow
   @ Out, root, ET.Element, the modified XML
   """
-  # Set sampler limit to the number of denoises
+  # Modify the inner XML based on values passed in in the mod_dict dictionary. The keys of mod_dict are
+  # paths which point to an element in the XML tree, and the text of that element is set to the key's value.
   for k, v in mod_dict.items():
+    # The entries in mod_dict are given in a RAVEN-specific pathing format with with pipe-separated ('|')
+    # portions of the XML path. Converting those RAVEN paths to XPaths lets us directly search for the
+    # intended XML element in the tree.
     xpath = alias_to_xpath(k)
     root.find(xpath).text = str(v)
     # special handling for denoises

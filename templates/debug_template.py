@@ -6,8 +6,6 @@
   @author: Jacob Bryan (@j-bryan)
   @date: 2024-12-23
 """
-from pathlib import Path
-
 from .raven_template import RavenTemplate
 
 from .snippets.models import EnsembleModel
@@ -23,18 +21,24 @@ from .xml_utils import find_node
 
 class DebugTemplate(RavenTemplate):
   """ Sets up a flat RAVEN run for debug mode """
-  template_path = Path("xml/debug.xml")
-  write_name = Path("outer.xml")
+  template_name = "debug.xml"
+  write_name = "outer.xml"
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
-    super().createWorkflow(case, components, sources)
+    super().createWorkflow(**kwargs)
+    case = kwargs["case"]
+    components = kwargs["components"]
+    sources = kwargs["sources"]
+
+    # RunInfo initialization
+    case_name = self.namingTemplates["jobname"].format(case=case.name, io="o")
+    self._set_case_name(case_name)
+    self._initialize_runinfo(case)
 
     # First, handle aspects of the workflow common across all debug runs
     self._update_vargroups(case, components, sources)
@@ -140,15 +144,13 @@ class DebugTemplate(RavenTemplate):
     for func in self._get_function_files(sources):
       multirun.add_input(func)
 
-  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
+  def _initialize_runinfo(self, case: HeronCase) -> None:
     """
     Initializes the RunInfo node of the workflow
-    @ In, case, Case, the HERON Case object
     @ In, case_name, str, optional, the case name
-    @ Out, run_info, RunInfo, a RunInfo object describing case run info
+    @ Out, None
     """
-    case_name = case_name or self.namingTemplates["jobname"].format(case=case.name, io="o")
-    run_info = super()._initialize_runinfo(case, case_name)
+    run_info = self._template.find("RunInfo")  # type: RunInfo
 
     # Use the outer parallel settings for flat run modes
     batch_size = min(case.outerParallel, 1) * min(case.innerParallel, 1)
@@ -158,8 +160,6 @@ class DebugTemplate(RavenTemplate):
       # Fills in parallel settings for template RunInfo from case. Also applies pre-sets for known
       # hostnames (e.g. sawtooth, bitterroot), as specified in the HERON/templates/parallel/*.xml files.
       run_info.set_parallel_run_settings(case.parallelRunInfo)
-
-    return run_info
 
   def _use_time_series_rom(self, sampler: MonteCarlo, case: HeronCase, sources: list[Source]) -> None:
     """

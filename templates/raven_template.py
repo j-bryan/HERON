@@ -93,59 +93,74 @@ class RavenTemplate(Template):
                              "metric_name"    : "{stats}_{econ}",
                              "statistic"      : "{prefix}_{name}"
                              })
+    self._template = None
 
   ########################
   # PUBLIC API FUNCTIONS #
   ########################
 
-  def loadTemplate(self) -> None:
+  def loadTemplate(self, filename: str, path: str) -> None:
     """
-    Load a template XML file into an ET.Element tree
-    @ In, None,
-    @ Out, None
+      Loads template file statefully.
+      @ In, filename, str, name of file to load (xml)
+      @ In, path, str, path to file relative to HERON/templates/
+      @ Out, None
     """
-    this_file_dir = Path(__file__).parent
-    template_path = this_file_dir / self.template_path
-    raw_template, _ = xmlUtils.loadToTree(str(template_path))
-    # Parsing the XML tree into RavenSnippet classes gives us access to handy attributes and methods for manipulating
-    # the template XML.
-    self._template = parse_to_snippets(raw_template)
+    super().loadTemplate(filename, path)
+    self._template = parse_to_snippets(self._template)
 
-  def createWorkflow(self, case: HeronCase, components: list[Component], sources: list[Source]) -> None:
+  def createWorkflow(self, **kwargs) -> None:
     """
     Create a workflow for the specified Case and its components and sources
-    @ In, case, HeronCase, the HERON case
-    @ In, components, list[Component], components in HERON case
-    @ In, sources, list[Source], external models, data, and functions
+    @ In, kwargs, dict, keyword arguments
     @ Out, None
     """
     # Universal workflow settings
-    self._set_verbosity(case.get_verbosity())
-    self._initialize_runinfo(case)
+    self._set_verbosity(kwargs["case"].get_verbosity())
 
-  def writeWorkflow(self, loc: str) -> None:
+  def writeWorkflow(self, template: ET.Element, destination: str, run: bool = False) -> None:
     """
-    Write RAVEN workflow
-    @ In, loc, str, path to write workflows to
-    @ Out, None
+      Writes a template to file.
+      @ In, template, xml.etree.ElementTree.Element, file to write
+      @ In, destination, str, path and filename to write to
+      @ In, run, bool, optional, if True then run the workflow after writing? good idea?
+      @ Out, errors, int, 0 if successfully wrote [and run] and nonzero if there was a problem
     """
     # Ensure all node attribute values and text are expressed as strings. Errors are thrown if any of these aren't
     # strings. Enforcing this here allows flexibility with how node values are stored and manipulated before write
     # time, such as storing values as lists or numeric types. For example, text fields which are a comma-separated
     # list of values can be stored in the RavenSnippet object as a list, and new items can be inserted into that
     # list as needed, then the list can be converted to a string only now at write time.
-    stringify_node_values(self._template)
+    stringify_node_values(template)
 
     # Remove any unused top-level nodes (Models, Samplers, etc.) to keep things looking clean
-    for node in self._template:
+    for node in template:
       if len(node) == 0:
-        self._template.remove(node)
+        template.remove(node)
 
-    dest_dir = Path(loc)
-    xml_file = dest_dir / self.write_name
+    super().writeWorkflow(template, destination, run)
+    print(f"Wrote '{self.write_name}' to '{destination}'")
 
-    xml_file.write_text(xmlUtils.prettify(self._template))
-    print(f"Wrote '{self.write_name}' to '{str(dest_dir.resolve())}'")
+  @property
+  def template_xml(self) -> ET.Element:
+    """
+      Getter property for the template XML ET.Element tree
+      @ In, None
+      @ Out, _template, ET.Element, the XML tree
+    """
+    return self._template
+
+  def get_write_path(self, dest_dir: str) -> str:
+    """
+      Get the path of to write the template to
+      @ In, dest_dir, str, the directory to write the file to
+      @ Out, path, str, the path (directory + file name) to write to
+    """
+    write_name = getattr(self, "write_name", None)
+    if not write_name:
+      raise ValueError(f"Template class {self.__class__.__name__} object has no 'write_name' attribute.")
+    path = os.path.join(dest_dir, write_name)
+    return path
 
   #####################
   # SNIPPET UTILITIES #
@@ -200,21 +215,15 @@ class RavenTemplate(Template):
     """
     self._template.set("verbosity", verbosity)
 
-  # RunInfo
-  def _initialize_runinfo(self, case: HeronCase, case_name: str | None = None) -> RunInfo:
+  def _set_case_name(self, name: str) -> None:
     """
-    Initializes the RunInfo node of the workflow
-    @ In, case, Case, the HERON Case object
-    @ In, case_name, str, optional, the case name
-    @ Out, run_info, RunInfo, a RunInfo object describing case run info
+    Sets the JobName and WorkingDir values in the RunInfo block to the given name
+    @ In, name, str, case name to use
+    @ Out, None
     """
     run_info = self._template.find("RunInfo")  # type: RunInfo
-
-    if case_name:
-      run_info.job_name = case_name
-      run_info.working_dir = case_name
-
-    return run_info
+    run_info.job_name = name
+    run_info.working_dir = name
 
   def _add_step_to_sequence(self, step: Step, index: int | None = None) -> None:
     """
@@ -341,7 +350,8 @@ class RavenTemplate(Template):
 
   def _get_statistical_results_vars(self, case: HeronCase, components: list[Component]) -> list[str]:
     """
-    Collects result metric names for statistical metrics
+    Collects result metric names for statistical metrics. Should only be used with templates which have multiple
+    time series samples.
     @ In, case, Case, HERON case
     @ In, components, list[Component], HERON components
     @ Out, var_names, list[str], list of variable names
@@ -399,22 +409,6 @@ class RavenTemplate(Template):
     return act_metrics
 
   # Models
-  def _pickled_rom_from_source(self, source: Source) -> PickledROM:
-    """
-    Load a pickled ROM described by a Source object
-    @ In, source, Source, the source describing the pickled ROM
-    @ Out, rom, PickledROM, the pickled ROM node
-    """
-    rom = PickledROM(source.name)
-    if source.needs_multiyear is not None:
-      rom.add_subelements({"Multicycle" : {"cycles": source.needs_multiyear}})
-    if source.limit_interp is not None:
-      rom.add_subelements(maxCycles=source.limit_interp)
-    self._add_snippet(rom)
-    if source.eval_mode == "clustered":
-      ET.SubElement(rom, "clusterEvalMode").text = "clustered"
-    return rom
-
   def _add_time_series_roms(self, ensemble_model: EnsembleModel, case: HeronCase, sources: list[Source]) -> None:
     """
     Create and modify snippets based on sources
