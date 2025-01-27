@@ -1,3 +1,8 @@
+"""
+Unit tests for the Files snippets
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -13,7 +18,13 @@ import xml.etree.ElementTree as ET
 
 
 class TestFile(unittest.TestCase):
+  """ Tests for File snippets """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.file = File()
 
     xml = "<Input name='raven_inner' type='raven'>path/to/inner.xml</Input>"
@@ -21,12 +32,27 @@ class TestFile(unittest.TestCase):
     self.file_xml = File.from_xml(root)
 
   def test_snippet_class(self):
+    """
+    Test snippet_class value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.file.snippet_class, "Files")
 
   def test_tag(self):
+    """
+    Test tag value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.file.tag, "Input")
 
   def test_from_xml(self):
+    """
+    Test instantiate from XML
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.file_xml.name, "raven_inner")
     self.assertEqual(self.file_xml.get("name"), "raven_inner")
     self.assertEqual(self.file_xml.type, "raven")
@@ -35,13 +61,23 @@ class TestFile(unittest.TestCase):
     self.assertEqual(self.file_xml.text, "path/to/inner.xml")
 
   def test_type(self):
+    """
+    Test type attribute
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.file.type)
-    type = "some_type"
-    self.file.type = type
-    self.assertEqual(self.file.type, type)
-    self.assertEqual(self.file.get("type"), type)
+    val = "some_type"
+    self.file.type = val
+    self.assertEqual(self.file.type, val)
+    self.assertEqual(self.file.get("type"), val)
 
   def test_path(self):
+    """
+    Test path property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.file.path)
     path = "path/to/file.xml"
     self.file.path = path
@@ -49,6 +85,11 @@ class TestFile(unittest.TestCase):
     self.assertEqual(self.file.text, path)
 
   def test_to_assembler_node(self):
+    """
+    Test to_assmebler node method
+    @ In, None
+    @ Out, None
+    """
     xml1 = """<Input name="inner_workflow" type="raven">../inner.xml</Input>"""
     file1 = File.from_xml(ET.fromstring(xml1))
     assemb1 = file1.to_assembler_node("File")

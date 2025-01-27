@@ -1,3 +1,8 @@
+"""
+Unit tests for the DataObject RavenSnippet classes
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -13,16 +18,35 @@ import xml.etree.ElementTree as ET
 
 
 class TestDataObjectBase:
+  """
+  Tests for the DataObject RavenSnippet base class. These are tests inherited by
+  the concrete database classes and not run directly.
+  """
   def test_snippet_class(self):
+    """
+    Test snippet_class class attribute
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.obj.snippet_class, "DataObjects")
 
   def test_inputs(self):
+    """
+    Test inputs property
+    @ In, None
+    @ Out, None
+    """
     self.assertListEqual(self.obj.inputs, [])
     self.obj.inputs.append("inp1")
     self.assertListEqual(self.obj.inputs, ["inp1"])
     self.assertListEqual(self.obj.find("Input").text, ["inp1"])
 
   def test_outputs(self):
+    """
+    Test outputs property
+    @ In, None
+    @ Out, None
+    """
     self.assertListEqual(self.obj.outputs, [])
     self.obj.outputs.append("out1")
     self.assertListEqual(self.obj.outputs, ["out1"])
@@ -30,29 +54,67 @@ class TestDataObjectBase:
 
 
 class TestPointSet(unittest.TestCase, TestDataObjectBase):
+  """ PointSet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.obj = PointSet()
 
   def test_tag(self):
+    """
+    Test tag string
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.obj.tag, "PointSet")
 
 
 class TestHistorySet(unittest.TestCase, TestDataObjectBase):
+  """ HistorySet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.obj = HistorySet()
 
   def test_tag(self):
+    """
+    Test tag string
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.obj.tag, "HistorySet")
 
 
 class TestDataSet(unittest.TestCase, TestDataObjectBase):
+  """ DataSet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.obj = DataSet()
 
   def test_tag(self):
+    """
+    Test tag string
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.obj.tag, "DataSet")
 
   def test_add_index(self):
+    """
+    Test add index to DataSet
+    @ In, None
+    @ Out, None
+    """
     self.obj.add_index("index_var", "some_var")
     index_node = self.obj.find("Index[@var='index_var']")
     self.assertIsNotNone(index_node)

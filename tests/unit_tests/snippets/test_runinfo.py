@@ -1,3 +1,8 @@
+"""
+Unit tests for the RunInfo snippets
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -18,6 +23,11 @@ class TestRunInfo(unittest.TestCase):
   """ Tests for the RunInfo RavenSnippet class """
 
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.run_info = RunInfo()
 
     xml = """
@@ -33,22 +43,47 @@ class TestRunInfo(unittest.TestCase):
     self.run_info_xml = run_info_xml
 
   def test_from_xml(self):
+    """
+    Test instantiate from XML
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.run_info_xml.job_name, "test_job_name")
     self.assertEqual(self.run_info_xml.working_dir, "./working/dir/name")
     self.assertEqual(self.run_info_xml.batch_size, 2)
     self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2"])
 
   def test_add_step_to_sequence(self):
+    """
+    Test append step to sequence
+    @ In, None
+    @ Out, None
+    """
     self.run_info_xml.sequence.append("new_step")
     self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2", "new_step"])
 
   def test_snippet_class(self):
+    """
+    Test snippet_class value
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.snippet_class)
 
   def test_tag(self):
+    """
+    Test tag value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.run_info.tag, "RunInfo")
 
   def test_job_name(self):
+    """
+    Test job_name property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("JobName"))
     self.assertIsNone(self.run_info.job_name)
     job_name = "some_job_name"
@@ -57,6 +92,11 @@ class TestRunInfo(unittest.TestCase):
     self.assertEqual(self.run_info.find("JobName").text, job_name)
 
   def test_working_dir(self):
+    """
+    Test working_dir property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("WorkingDir"))
     self.assertIsNone(self.run_info.working_dir)
     working_dir = "path/to/dir"
@@ -65,6 +105,11 @@ class TestRunInfo(unittest.TestCase):
     self.assertEqual(self.run_info.find("WorkingDir").text, working_dir)
 
   def test_batch_size(self):
+    """
+    Test batch_size property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("batchSize"))
     self.assertIsNone(self.run_info.batch_size)
     batch_size = 10
@@ -73,6 +118,11 @@ class TestRunInfo(unittest.TestCase):
     self.assertEqual(self.run_info.find("batchSize").text, batch_size)
 
   def test_internal_parallel(self):
+    """
+    Test internal_parallel property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("internalParallel"))
     self.assertFalse(self.run_info.use_internal_parallel)
 
@@ -89,6 +139,11 @@ class TestRunInfo(unittest.TestCase):
     self.assertIsNone(self.run_info.find("internalParallel"))
 
   def test_num_mpi(self):
+    """
+    Test num_mpi property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("NumMPI"))
     self.assertIsNone(self.run_info.num_mpi)
     num_mpi = 10
@@ -97,6 +152,11 @@ class TestRunInfo(unittest.TestCase):
     self.assertEqual(self.run_info.find("NumMPI").text, num_mpi)
 
   def test_sequence(self):
+    """
+    Test sequence property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.run_info.find("Sequence"))
     self.assertListEqual(self.run_info.sequence, [])
     self.run_info.sequence.append("step1")
@@ -107,12 +167,22 @@ class TestRunInfo(unittest.TestCase):
     self.assertListEqual(self.run_info.sequence, [])
 
   def test_add_step_obj_to_sequence(self):
+    """
+    Test add Step object to sequence
+    @ In, None
+    @ Out, None
+    """
     iostep = IOStep(name="new_step")
     self.run_info_xml.sequence.append(iostep)
     self.assertListEqual(self.run_info_xml.sequence, ["step1", "step2", "new_step"])
     self.assertListEqual(self.run_info_xml.find("Sequence").text, ["step1", "step2", "new_step"])
 
   def test_set_parallel_run_settings(self):
+    """
+    Test set_parallel_run_settings method
+    @ In, None
+    @ Out, None
+    """
     parallel_info = {
       "memory": "4g",
       "expectedTime": "72:0:0",
@@ -126,6 +196,11 @@ class TestRunInfo(unittest.TestCase):
       self.assertEqual(node.text, v)
 
   def test_apply_parallel_xml(self):
+    """
+    Test apply_parallel_xml method
+    @ In, None
+    @ Out, None
+    """
     # Get the parallel XML settings to apply. We'll use the bitterroot settings to test.
     hostname = "bitterroot1.ib"
     xml = get_parallel_xml(hostname)
@@ -145,11 +220,21 @@ class TestUtilities(unittest.TestCase):
   """ Tests for utility functions used by the RunInfo class """
 
   def test_get_default_parallel_settings(self):
+    """
+    Test get_default_parallel_settings function
+    @ In, None
+    @ Out, None
+    """
     defaults = get_default_parallel_settings()
     gold = ET.fromstring("<parallel><useParallel><mode>mpi<runQSUB/></mode></useParallel></parallel>")
     self.assertEqual(ET.tostring(defaults), ET.tostring(gold))
 
   def test_get_parallel_xml(self):
+    """
+    Test get_parallel_xml function
+    @ In, None
+    @ Out, None
+    """
     for cluster_name in ["sawtooth", "bitterroot"]:
       gold_xml_path = os.path.join(HERON_LOC, "HERON", "templates", "parallel", f"{cluster_name}.xml")
       gold = ET.tostring(ET.parse(gold_xml_path).getroot())

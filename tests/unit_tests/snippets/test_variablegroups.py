@@ -1,3 +1,8 @@
+"""
+Unit tests for the VariableGroup snippets
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -14,7 +19,13 @@ import xml.etree.ElementTree as ET
 
 
 class TestVariableGroup(unittest.TestCase):
+  """ VariableGroup snippet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     # __init__ constructor
     self.group = VariableGroup(name="GRO_group")
 
@@ -24,6 +35,11 @@ class TestVariableGroup(unittest.TestCase):
     self.group_xml = VariableGroup.from_xml(root)
 
   def test_from_xml(self):
+    """
+    Test instantiate from XML
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.group_xml.snippet_class, "VariableGroups")
     self.assertEqual(self.group_xml.tag, "Group")
     self.assertEqual(self.group_xml.name, "GRO_group")
@@ -31,6 +47,11 @@ class TestVariableGroup(unittest.TestCase):
     self.assertListEqual(self.group_xml.text, ["var1", "var2", "var3"])
 
   def test_default(self):
+    """
+    Test default values
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.group.snippet_class, "VariableGroups")
     self.assertEqual(self.group.tag, "Group")
     self.assertEqual(self.group.name, "GRO_group")
@@ -38,6 +59,11 @@ class TestVariableGroup(unittest.TestCase):
     self.assertIsNone(self.group.text)
 
   def test_set_variables(self):
+    """
+    Test variables property
+    @ In, None
+    @ Out, None
+    """
     self.group.variables = ["var1", "var2"]
     self.assertListEqual(self.group.text, ["var1", "var2"])
 

@@ -1,3 +1,8 @@
+"""
+Unit tests for the Steps snippets
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -13,10 +18,21 @@ import unittest
 
 
 class TestStepBase:
+  """ Step base class tests """
   def test_snippet_class(self):
+    """
+    Test snippet_class value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.step.snippet_class, "Steps")
 
   def test_add_item(self):
+    """
+    Test add_item method
+    @ In, None
+    @ Out, None
+    """
     snippet = MockSnippet()
 
     assemb_tags = ["Function", "Input", "Model", "Sampler", "Optimizer", "SolutionExport", "Output"]
@@ -46,24 +62,57 @@ class TestStepBase:
 
 
 class TestMultiRun(unittest.TestCase, TestStepBase):
+  """ MultiRun step tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.step = MultiRun("multirun")
 
   def test_tag(self):
+    """
+    Test tag value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.step.tag, "MultiRun")
 
 
 class TestIOStep(unittest.TestCase, TestStepBase):
+  """ IOStep step tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.step = IOStep("io_step")
 
   def test_tag(self):
+    """
+    Test tag value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.step.tag, "IOStep")
 
 
 class TestPostProcess(unittest.TestCase, TestStepBase):
+  """ PostProcess step tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.step = PostProcess("pp")
 
   def test_tag(self):
+    """
+    Test tag value
+    @ In, None
+    @ Out, None
+    """
     self.assertEqual(self.step.tag, "PostProcess")

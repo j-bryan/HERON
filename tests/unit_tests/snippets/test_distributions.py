@@ -1,3 +1,8 @@
+"""
+Unit tests for the Distributions RavenSnippet classes
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -42,15 +47,31 @@ dists = [
 ]
 
 class TestDistributions(unittest.TestCase):
+  """ Tests for all distribution classes """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.dist_classes = {dist_name: getattr(distributions, dist_name) for dist_name in dists}
 
   def test_constructed_distributions(self):
+    """
+    Test distribution object construction
+    @ In, None
+    @ Out, None
+    """
     for dist_name, cls in self.dist_classes.items():
       self.assertEqual(cls.snippet_class, "Distributions")
       self.assertEqual(cls.tag, dist_name)
 
   def test_from_xml(self):
+    """
+    Test instantiate from XML
+    @ In, None
+    @ Out, None
+    """
     for dist_name, cls in self.dist_classes.items():
       xml = f"<{dist_name} name='new_dist'/>"
       root = ET.fromstring(xml)
@@ -63,10 +84,21 @@ class TestDistributions(unittest.TestCase):
 # Explicit testing of just a couple of the most common distributions we expect to see in HERON.
 
 class TestUniform(unittest.TestCase):
+  """ Tests for the Uniform distribution class """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.dist = distributions.Uniform()
 
   def test_bounds(self):
+    """
+    Test distribution bounds properties
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.dist.lower_bound)
     self.assertIsNone(self.dist.upper_bound)
 
@@ -80,10 +112,21 @@ class TestUniform(unittest.TestCase):
 
 
 class TestNormal(unittest.TestCase):
+  """ Normal distribution tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.dist = distributions.Normal()
 
   def test_params(self):
+    """
+    Test mean and sigma properties
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.dist.mean)
     self.assertIsNone(self.dist.sigma)
 

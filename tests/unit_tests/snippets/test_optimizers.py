@@ -1,3 +1,8 @@
+"""
+Unit tests for the optimizers snippets
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 import unittest
@@ -12,10 +17,16 @@ sys.path.pop()
 
 
 class TestOptimizerBase:
+  """ Optimizer snippet class tests """
   def test_snippet_class(self):
     self.assertEqual(self.opt.snippet_class, "Optimizers")
 
   def test_objective(self):
+    """
+    Test objective property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.opt.find("objective"))
     self.assertIsNone(self.opt.objective)
     objective = "the_objective"
@@ -24,6 +35,11 @@ class TestOptimizerBase:
     self.assertEqual(self.opt.find("objective").text, objective)
 
   def test_target_evaluation(self):
+    """
+    Test target_evaluation property
+    @ In, None
+    @ Out, None
+    """
     self.assertIsNone(self.opt.find("TargetEvaluation"))
     self.assertIsNone(self.opt.target_evaluation)
     snippet = MockSnippet("data_obj", "DataObjects", "PointSet")
@@ -34,6 +50,11 @@ class TestOptimizerBase:
     self.assertEqual(self.opt.find("TargetEvaluation").text, assemb.text)
 
   def test_base_set_opt_settings(self):
+    """
+    Test set_opt_settings method
+    @ In, None
+    @ Out, None
+    """
     # no settings; test if no error is thrown
     self.opt.set_opt_settings({})
 
@@ -53,10 +74,21 @@ class TestOptimizerBase:
 
 
 class TestBayesianOptimizer(unittest.TestCase, TestOptimizerBase):
+  """ BayesianOptimizer snippet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.opt = BayesianOptimizer()
 
   def test_has_default_settings(self):
+    """
+    Test default settings
+    @ In, None
+    @ Out, None
+    """
     default_settings = {
       "samplerInit": {
         "limit": 100,
@@ -76,6 +108,11 @@ class TestBayesianOptimizer(unittest.TestCase, TestOptimizerBase):
     self.assertTrue(is_subtree_matching(self.opt, default_settings))
 
   def test_set_opt_settings(self):
+    """
+    Test set_opt_settings method
+    @ In, None
+    @ Out, None
+    """
     # no settings; test if no error is thrown
     self.opt.set_opt_settings({})
     self.assertIsNone(self.opt.find("samplerInit/initialSeed"))  # not set without passing in with settings dict
@@ -105,6 +142,11 @@ class TestBayesianOptimizer(unittest.TestCase, TestOptimizerBase):
     self.assertEqual(self.opt.find("samplerInit/initialSeed").text, 12345)
 
   def test_set_sampler(self):
+    """
+    Test set_sampler method
+    @ In, None
+    @ Out, None
+    """
     sampler = MockSnippet("sampler", "Samplers", "Stratified")
     self.opt.set_sampler(sampler)
     node = self.opt.find("Sampler")
@@ -112,6 +154,11 @@ class TestBayesianOptimizer(unittest.TestCase, TestOptimizerBase):
     self.assertEqual(node.text, sampler.name)
 
   def test_set_rom(self):
+    """
+    Test set_rom method
+    @ In, None
+    @ Out, None
+    """
     rom = MockSnippet("gpr", "Models", "ROM")
     self.opt.set_rom(rom)
     node = self.opt.find("ROM")
@@ -120,10 +167,21 @@ class TestBayesianOptimizer(unittest.TestCase, TestOptimizerBase):
 
 
 class TestGradientDescent(unittest.TestCase, TestOptimizerBase):
+  """ GradientDescent snippet tests """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.opt = GradientDescent()
 
   def test_has_default_settings(self):
+    """
+    Test default settings
+    @ In, None
+    @ Out, None
+    """
     default_settings = {
       "samplerInit": {
         "limit": 800,
@@ -152,6 +210,11 @@ class TestGradientDescent(unittest.TestCase, TestOptimizerBase):
     self.assertTrue(is_subtree_matching(self.opt, default_settings))
 
   def test_set_opt_settings(self):
+    """
+    Test set_opt_settings method
+    @ In, None
+    @ Out, None
+    """
     # no settings; test if no error is thrown
     self.opt.set_opt_settings({})
 

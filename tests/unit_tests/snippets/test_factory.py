@@ -1,3 +1,8 @@
+"""
+Unit tests for the snippet factory
+@author: Jacob Bryan (@j-bryan)
+@date: 2024-12-11
+"""
 import sys
 import os
 
@@ -13,25 +18,35 @@ import xml.etree.ElementTree as ET
 
 
 class MockBase:
+  """ Base class for mock snippets """
   tag = None
   subtype = None
 
   @classmethod
   def get(cls, key, default=None):
+    """
+    Mock for xml.etree.ElementTree.Element `get` method
+    @ In, key, Any, the attribute key
+    @ In, default, Any, optional, default value if key not present
+    @ Out, value, Any, the attribute value
+    """
     return getattr(cls, key, default)
 
 
 class Mock(MockBase):
+  """ Mock class with no set subtype """
   tag = "mock"
   subtype = None
 
 
 class MockA(MockBase):
+  """ Mock class with set subtype """
   tag = "mock"
   subtype = "a"
 
 
 class MockB(MockBase):
+  """ Mock class with set subtype """
   tag = "mock"
   subtype = "b"
 
@@ -39,9 +54,19 @@ class MockB(MockBase):
 class TestSnippetFactory(unittest.TestCase):
   """ Tests for the SnippetFactory class """
   def setUp(self):
+    """
+    Tester setup
+    @ In, None
+    @ Out, None
+    """
     self.factory = SnippetFactory()
 
   def test_register_snippet_class(self):
+    """
+    Test class registration
+    @ In, None
+    @ Out, None
+    """
     # Add a snippet class
     self.factory.register_snippet_class(Mock)
     self.assertIn(f"mock", self.factory.registered_classes)
@@ -61,6 +86,11 @@ class TestSnippetFactory(unittest.TestCase):
     self.assertEqual(len(self.factory.registered_classes), num_registered)
 
   def test_register_all_subclasses(self):
+    """
+    Test register all subclasses of a class
+    @ In, None
+    @ Out, None
+    """
     self.factory.register_all_subclasses(MockBase)
     gold = {
       "mock": Mock,
@@ -70,6 +100,11 @@ class TestSnippetFactory(unittest.TestCase):
     self.assertDictEqual(self.factory.registered_classes, gold)
 
   def test_has_registered_class(self):
+    """
+    test has_registered_class method
+    @ In, None
+    @ Out, None
+    """
     # Add a snippet class
     self.factory.register_snippet_class(Mock)
     # See if the class is found for a matching node
@@ -79,6 +114,11 @@ class TestSnippetFactory(unittest.TestCase):
     self.assertFalse(self.factory.has_registered_class(node_a))  # not registered
 
   def test_get_snippet_class_key(self):
+    """
+    Test _get_snippet_class_key method
+    @ In, None
+    @ Out, None
+    """
     # Get the key of a snippet-like class
     key = self.factory._get_snippet_class_key(Mock)
     self.assertEqual(key, "mock")
@@ -88,6 +128,11 @@ class TestSnippetFactory(unittest.TestCase):
     self.assertEqual(key, "mock[@subType='a']")
 
   def test_get_node_key(self):
+    """
+    Test _get_node_key method
+    @ In, None
+    @ Out, None
+    """
     # Get the key of an ET.Element
     node = ET.Element("element")
     key = self.factory._get_node_key(node)
